@@ -8,8 +8,8 @@
     "build": "electron-builder --win",
     "build:installer": "electron-builder --win nsis",
     "build:portable": "electron-builder --win portable",
-    "build:mac": "electron-builder --mac",
-    "build:all": "electron-builder -mw"
+    "build:mac": "electron-builder --mac -p never",
+    "build:all": "electron-builder -mw -p never"
   },
   "keywords": [
     "electron",
