@@ -14,10 +14,11 @@ fi
 echo "Version Node.js detectee : $(node -v)"
 echo "Version npm detectee : $(npm -v)"
 
-echo "[2/3] Installation des dependances du projet..."
+echo "[2/3] Installation des dependances du projet (moteur Electron 26 compatible macOS 10.13+)..."
 npm install
+npm install --save-dev electron@26.6.9
 
-echo "[3/3] Compilation du DMG macOS (Apple Silicon et Intel)..."
+echo "[3/3] Compilation du DMG macOS (Intel x64 compatible High Sierra et Apple Silicon arm64)..."
 npm run build:mac
 
 echo "--------------------------------------------------------"

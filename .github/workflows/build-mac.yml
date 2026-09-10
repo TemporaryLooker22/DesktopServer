@@ -22,10 +22,15 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install --save-dev electron@26.6.9
 
-      - name: Build macOS DMG
-        run: npm run build:mac
+      - name: Build macOS DMG (macOS 10.13+ High Sierra & modern macOS)
+        run: |
+          npm run build:mac
+          cp dist/DesktopServer-x64.dmg dist/DesktopServer.dmg || true
+          cp dist/DesktopServer-x64.dmg dist/DesktopServer-HighSierra.dmg || true
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -64,16 +64,32 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
+      "minimumSystemVersion": "10.13.0",
+      "extendInfo": {
+        "LSMinimumSystemVersion": "10.13.0"
+      },
       "icon": "build/icon.png",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },
     "dmg": {
       "title": "DesktopServer",
-      "artifactName": "DesktopServer.dmg",
+      "artifactName": "DesktopServer-${arch}.dmg",
       "contents": [
         {
           "x": 130,
