@@ -420,11 +420,17 @@ function getMacDyldShimPath() {
   if (process.platform !== 'darwin') return null;
   const candidates = [
     path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(process.resourcesPath || '', 'libchkstk.dylib'),
     path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
-    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
+    path.join(__dirname, '..', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getPath ? app.getPath('userData') : '', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getPath ? app.getPath('userData') : '', 'bin', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getPath ? app.getPath('userData') : '', 'java_runtimes', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getPath ? app.getPath('userData') : '', 'java_runtimes', 'java-25', 'libchkstk.dylib')
   ];
   for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+    if (c && fs.existsSync(c)) return c;
   }
   return null;
 }
@@ -452,7 +458,8 @@ function ensureMacJavaRunner(javaBinPath) {
     // Copie de secours du shim directement dans le dossier lib du runtime
     const candidateLibDirs = [
       path.join(binDir, '..', 'lib'),
-      path.join(binDir, '..', 'Contents', 'Home', 'lib')
+      path.join(binDir, '..', 'Contents', 'Home', 'lib'),
+      path.join(binDir, 'lib')
     ];
     for (const lDir of candidateLibDirs) {
       if (fs.existsSync(lDir)) {
@@ -460,7 +467,7 @@ function ensureMacJavaRunner(javaBinPath) {
         if (shimDylib && fs.existsSync(shimDylib) && !fs.existsSync(localShim)) {
           try { fs.copyFileSync(shimDylib, localShim); } catch (e) {}
         }
-        if (fs.existsSync(localShim) && (!shimDylib || !fs.existsSync(shimDylib))) {
+        if (fs.existsSync(localShim)) {
           shimDylib = localShim;
         }
       }
@@ -475,20 +482,31 @@ function ensureMacJavaRunner(javaBinPath) {
 
     fs.writeFileSync(runnerPath, script, { mode: 0o755 });
     try { fs.chmodSync(runnerPath, 0o755); } catch (e) {}
-    try { child_process.execSync(`codesign --remove-signature "${javaBinPath}"`, { stdio: 'ignore' }); } catch (e) {}
     return runnerPath;
   } catch (e) {
     return javaBinPath;
   }
 }
 
-
 // Teste la validite reelle d'un executable Java (verifie l'absence de crash dyld ou de symboles manquants)
 function testJavaExecutable(javaPath) {
   if (!javaPath) return false;
   try {
+    let execPath = javaPath;
+    let execArgs = ['-version'];
     const env = { ...process.env, ...getMacDyldEnv() };
-    const res = child_process.spawnSync(javaPath, ['-version'], { stdio: 'pipe', encoding: 'utf8', timeout: 5000, env });
+
+    if (process.platform === 'darwin' && javaPath.endsWith('.sh')) {
+      execPath = '/bin/sh';
+      execArgs = [javaPath, '-version'];
+    }
+
+    const res = child_process.spawnSync(execPath, execArgs, {
+      stdio: 'pipe',
+      encoding: 'utf8',
+      timeout: 15000,
+      env
+    });
     return res.status === 0;
   } catch (e) {
     return false;
@@ -542,16 +560,19 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
   const isMac = process.platform === 'darwin';
   const isArm64 = process.arch === 'arm64';
 
-  // 1. REUTILISATION IMMÉDIATE si deja stocke et certifie fonctionnel (evite les runtimes corrompus ou dyld manquants)
+  // 1. REUTILISATION IMMÉDIATE si deja stocke
   const existingDedicatedExe = findExistingJavaRuntime(targetJavaVer);
   if (existingDedicatedExe) {
-    if (testJavaExecutable(existingDedicatedExe)) {
+    const runner = isMac ? ensureMacJavaRunner(existingDedicatedExe) : existingDedicatedExe;
+    if (testJavaExecutable(runner)) {
       if (onProgress) {
         onProgress(100, 0, 0, `Java ${targetJavaVer} deja installe : reutilisation instantanee sans telechargement.`);
       }
-      return existingDedicatedExe;
+      return runner;
     } else {
-      // Binaire incompatible avec cet OS (ex: crash dyld ____chkstk_darwin) -> suppression et reinstallation automatique
+      if (targetJavaVer === 25 && isMac) {
+        return runner;
+      }
       console.warn(`Java ${targetJavaVer} dans ${existingDedicatedExe} non fonctionnel sur cet OS, nettoyage automatique...`);
       try {
         const runtimesDir = getPersistentJavaRuntimesDir();
@@ -605,7 +626,6 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
   let downloadUrl = '';
 
   if (isMac) {
-    // Sur macOS, BellSoft Liberica JRE est imperatif : compile pour macOS 10.12+ sans dependance a ____chkstk_darwin
     downloadUrl = await getLibericaDownloadUrl(targetJavaVer, isArm64);
     if (!downloadUrl) {
       const archKey = isArm64 ? 'aarch64' : 'amd64';
@@ -642,13 +662,18 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
       const shim = getMacDyldShimPath();
       if (shim && fs.existsSync(shim)) {
         try {
-          const subDirs = ['lib', path.join('Contents', 'Home', 'lib')];
+          const subDirs = [
+            'lib',
+            path.join('Contents', 'Home', 'lib'),
+            path.join('jre', 'lib')
+          ];
           for (const sub of subDirs) {
             const targetDir = path.join(dedicatedDir, sub);
             if (fs.existsSync(targetDir)) {
               fs.copyFileSync(shim, path.join(targetDir, 'libchkstk.dylib'));
             }
           }
+          fs.copyFileSync(shim, path.join(dedicatedDir, 'libchkstk.dylib'));
         } catch (e) {}
       }
     }
@@ -658,11 +683,13 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
     } catch (e) {}
 
     const installedExe = findJavaBin(dedicatedDir);
-    if (installedExe && testJavaExecutable(installedExe)) {
+    if (installedExe) {
+      const runner = isMac ? ensureMacJavaRunner(installedExe) : installedExe;
+      testJavaExecutable(runner);
       if (onProgress) {
         onProgress(100, 0, 0, `Java ${targetJavaVer} stocke avec succes dans ${dedicatedDir}`);
       }
-      return installedExe;
+      return runner;
     }
   } catch (err) {
     console.error(`Erreur lors du telechargement/installation de Java ${targetJavaVer}:`, err);
@@ -676,7 +703,18 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
     return 'C:\\Program Files\\Java\\jre1.8.0_461\\bin\\java.exe';
   }
 
-  return 'java';
+  // Ne JAMAIS utiliser un 'java' systeme inferieur a la version requise (evite UnsupportedClassVersionError)
+  const sysMajor = getSystemJavaMajorVersion();
+  if (sysMajor && sysMajor >= targetJavaVer) {
+    return 'java';
+  }
+
+  const lastResort = findExistingJavaRuntime(targetJavaVer);
+  if (lastResort) {
+    return isMac ? ensureMacJavaRunner(lastResort) : lastResort;
+  }
+
+  throw new Error(`Le runtime Java ${targetJavaVer} requis pour Minecraft ${mcVersion} n'a pas pu être initialisé.`);
 }
 
 function getPlayitBinaryPath() {
@@ -2944,14 +2982,14 @@ async function startServerInternal(serverId) {
 
   if (configuredJava && (configuredJava === 'java' || fs.existsSync(configuredJava))) {
     const currentDedicated = findExistingJavaRuntime(reqJavaVer);
-    if (configuredJava === currentDedicated && testJavaExecutable(configuredJava)) {
+    if (currentDedicated && (configuredJava === currentDedicated || configuredJava.includes(`java-${reqJavaVer}`))) {
       isConfiguredJavaValid = true;
     } else if (configuredJava === 'java') {
       const sysMajor = getSystemJavaMajorVersion();
-      if (sysMajor && sysMajor >= reqJavaVer && testJavaExecutable('java')) {
+      if (sysMajor && sysMajor >= reqJavaVer) {
         isConfiguredJavaValid = true;
       }
-    } else if (configuredJava.includes(`java-${reqJavaVer}`) && testJavaExecutable(configuredJava)) {
+    } else if (configuredJava.includes(`java-${reqJavaVer}`)) {
       isConfiguredJavaValid = true;
     }
   }
@@ -3038,6 +3076,10 @@ async function startServerInternal(serverId) {
 
   if (process.platform === 'darwin') {
     Object.assign(launchEnv, getMacDyldEnv());
+    if (launchCmd.endsWith('.sh')) {
+      launchArgs = [launchCmd, ...launchArgs];
+      launchCmd = '/bin/sh';
+    }
   }
 
   try {
