@@ -3255,8 +3255,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       const version = selectMcVersion.value || '1.21.4';
       const maxPlayers = parseInt(inputMaxPlayers.value, 10) || 20;
 
-      const basePort = 25565;
-      const port = basePort + servers.length;
+      const usedPorts = new Set((servers || []).map(s => parseInt(s.port, 10)).filter(p => !isNaN(p) && p > 0));
+      let port = 25565;
+      while (usedPorts.has(port)) {
+        port++;
+      }
 
       const inputRamMinVal = document.getElementById('inputCreateRamMinVal');
       const selectRamMinUnit = document.getElementById('inputCreateRamMinUnit');

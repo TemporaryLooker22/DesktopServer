@@ -321,7 +321,7 @@ function findJavaBin(dir, maxDepth = 5) {
       if (!isWin) {
         try { fs.chmodSync(cand, 0o755); } catch (e) {}
       }
-      return cand;
+      return process.platform === 'darwin' ? ensureMacJavaRunner(cand) : cand;
     }
   }
 
@@ -376,53 +376,10 @@ function findExistingJavaRuntime(targetJavaVer) {
   return null;
 }
 
-// Shim dyld pour macOS 10.13 High Sierra (resout le symbole manquant ____chkstk_darwin pour Java 25)
-function getMacDyldShimPath() {
-  if (process.platform !== 'darwin') return null;
-  const candidates = [
-    path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
-    path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
-    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
-  ];
-  try {
-    if (typeof app !== 'undefined' && app.getPath) {
-      candidates.push(path.join(app.getPath('userData'), 'bin', 'mac', 'libchkstk.dylib'));
-    }
-  } catch (e) {}
-
-  for (const c of candidates) {
-    if (c && fs.existsSync(c)) {
-      try {
-        if (typeof app !== 'undefined' && app.getPath) {
-          const userDylib = path.join(app.getPath('userData'), 'bin', 'mac', 'libchkstk.dylib');
-          if (c !== userDylib && !fs.existsSync(userDylib)) {
-            fs.mkdirSync(path.dirname(userDylib), { recursive: true });
-            fs.copyFileSync(c, userDylib);
-          }
-        }
-      } catch (err) {}
-      return c;
-    }
-  }
-  return null;
-}
-
-function getMacDyldEnv() {
-  const shim = getMacDyldShimPath();
-  if (shim) {
-    return {
-      DYLD_FORCE_FLAT_NAMESPACE: '1',
-      DYLD_INSERT_LIBRARIES: shim
-    };
-  }
-  return {};
-}
-
 // Détection de la version majeure du Java installé dans le PATH système
 function getSystemJavaMajorVersion() {
   try {
-    const env = { ...process.env, ...getMacDyldEnv() };
-    const res = child_process.spawnSync('java', ['-version'], { encoding: 'utf8', env });
+    const res = child_process.spawnSync('java', ['-version'], { encoding: 'utf8' });
     const output = (res.stderr || '') + (res.stdout || '');
     const match = output.match(/version "([0-9]+)(?:\.([0-9]+))?/i);
     if (match) {
@@ -457,6 +414,74 @@ function extractArchive(archivePath, destDir) {
   }
 }
 const extractZipArchive = extractArchive;
+
+// Shim dyld pour macOS 10.13 High Sierra (resout le symbole manquant ____chkstk_darwin pour Java 25)
+function getMacDyldShimPath() {
+  if (process.platform !== 'darwin') return null;
+  const candidates = [
+    path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function getMacDyldEnv() {
+  const shim = getMacDyldShimPath();
+  if (shim) {
+    return {
+      DYLD_FORCE_FLAT_NAMESPACE: '1',
+      DYLD_INSERT_LIBRARIES: shim
+    };
+  }
+  return {};
+}
+
+// Genere un lanceur d'execution direct sur macOS (evite le filtrage des variables DYLD par le systeme)
+function ensureMacJavaRunner(javaBinPath) {
+  if (process.platform !== 'darwin' || !javaBinPath || !fs.existsSync(javaBinPath)) return javaBinPath;
+  if (javaBinPath.endsWith('.sh')) return javaBinPath;
+  try {
+    const binDir = path.dirname(javaBinPath);
+    const runnerPath = path.join(binDir, 'java_runner.sh');
+    let shimDylib = getMacDyldShimPath();
+
+    // Copie de secours du shim directement dans le dossier lib du runtime
+    const candidateLibDirs = [
+      path.join(binDir, '..', 'lib'),
+      path.join(binDir, '..', 'Contents', 'Home', 'lib')
+    ];
+    for (const lDir of candidateLibDirs) {
+      if (fs.existsSync(lDir)) {
+        const localShim = path.join(lDir, 'libchkstk.dylib');
+        if (shimDylib && fs.existsSync(shimDylib) && !fs.existsSync(localShim)) {
+          try { fs.copyFileSync(shimDylib, localShim); } catch (e) {}
+        }
+        if (fs.existsSync(localShim) && (!shimDylib || !fs.existsSync(shimDylib))) {
+          shimDylib = localShim;
+        }
+      }
+    }
+
+    const script = [
+      '#!/bin/sh',
+      'export DYLD_FORCE_FLAT_NAMESPACE=1',
+      shimDylib ? `export DYLD_INSERT_LIBRARIES="${shimDylib}"` : '',
+      `exec "${javaBinPath}" "$@"`
+    ].filter(Boolean).join('\n') + '\n';
+
+    fs.writeFileSync(runnerPath, script, { mode: 0o755 });
+    try { fs.chmodSync(runnerPath, 0o755); } catch (e) {}
+    try { child_process.execSync(`codesign --remove-signature "${javaBinPath}"`, { stdio: 'ignore' }); } catch (e) {}
+    return runnerPath;
+  } catch (e) {
+    return javaBinPath;
+  }
+}
+
 
 // Teste la validite reelle d'un executable Java (verifie l'absence de crash dyld ou de symboles manquants)
 function testJavaExecutable(javaPath) {
@@ -612,6 +637,21 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
     }
 
     extractArchive(tempArchive, dedicatedDir);
+
+    if (process.platform === 'darwin') {
+      const shim = getMacDyldShimPath();
+      if (shim && fs.existsSync(shim)) {
+        try {
+          const subDirs = ['lib', path.join('Contents', 'Home', 'lib')];
+          for (const sub of subDirs) {
+            const targetDir = path.join(dedicatedDir, sub);
+            if (fs.existsSync(targetDir)) {
+              fs.copyFileSync(shim, path.join(targetDir, 'libchkstk.dylib'));
+            }
+          }
+        } catch (e) {}
+      }
+    }
 
     try {
       if (fs.existsSync(tempArchive)) fs.unlinkSync(tempArchive);
@@ -889,8 +929,50 @@ function freePortIfOccupied(port) {
 // MODULE RÉSEAU : UPNP DIRECT (0 MS DÉTOUR, LATENCE NATIVE 5-15 MS)
 // ============================================================================
 
+let cachedUPnPGateway = null;
+
 function getLocalIpForGateway(gatewayIp) {
   const ifaces = os.networkInterfaces();
+  const gwParts = (gatewayIp || '').split('.');
+
+  // 1. Chercher d'abord une interface dans le MEME sous-reseau (ex: 192.168.1.X)
+  if (gwParts.length === 4) {
+    const subnet = `${gwParts[0]}.${gwParts[1]}.${gwParts[2]}.`;
+    for (const name of Object.keys(ifaces)) {
+      for (const net of ifaces[name]) {
+        if (net.family === 'IPv4' && !net.internal && net.address.startsWith(subnet)) {
+          return net.address;
+        }
+      }
+    }
+  }
+
+  // 2. Sur macOS, prioriser les interfaces physiques standard (en0 Wi-Fi/Ethernet)
+  const prioritizedNames = ['en0', 'en1', 'eth0', 'wlan0', 'Ethernet', 'Wi-Fi'];
+  for (const name of prioritizedNames) {
+    if (ifaces[name]) {
+      for (const net of ifaces[name]) {
+        if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('127.')) {
+          return net.address;
+        }
+      }
+    }
+  }
+
+  // 3. Ignorer les interfaces virtuelles classiques (utun, bridge, awdl, llw, vbox, docker)
+  for (const name of Object.keys(ifaces)) {
+    const low = name.toLowerCase();
+    if (low.startsWith('utun') || low.startsWith('bridge') || low.startsWith('awdl') || low.startsWith('llw') || low.startsWith('vbox') || low.startsWith('docker')) {
+      continue;
+    }
+    for (const net of ifaces[name]) {
+      if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('127.')) {
+        return net.address;
+      }
+    }
+  }
+
+  // 4. Fallback
   for (const name of Object.keys(ifaces)) {
     for (const net of ifaces[name]) {
       if (net.family === 'IPv4' && !net.internal) {
@@ -901,14 +983,45 @@ function getLocalIpForGateway(gatewayIp) {
   return '127.0.0.1';
 }
 
-function discoverUPnPGateway(timeoutMs = 3500) {
+function verifyGatewayReachable(gw) {
+  if (!gw || !gw.host || !gw.controlPath) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const req = http.request({
+      hostname: gw.host,
+      port: gw.port || 80,
+      path: gw.controlPath,
+      method: 'GET',
+      timeout: 800
+    }, (res) => {
+      resolve(res.statusCode >= 200 && res.statusCode < 600);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
+async function discoverUPnPGateway(timeoutMs = 5000) {
+  // Verification rapide du cache memoire
+  if (cachedUPnPGateway) {
+    const isAlive = await verifyGatewayReachable(cachedUPnPGateway);
+    if (isAlive) {
+      cachedUPnPGateway.localIp = getLocalIpForGateway(cachedUPnPGateway.host);
+      return cachedUPnPGateway;
+    }
+    cachedUPnPGateway = null;
+  }
+
   return new Promise((resolve, reject) => {
     let client = null;
     let resolved = false;
     let timer = null;
+    let burstTimers = [];
 
     const cleanup = () => {
       if (timer) clearTimeout(timer);
+      burstTimers.forEach(t => clearTimeout(t));
+      burstTimers = [];
       if (client) {
         try { client.close(); } catch (e) {}
         client = null;
@@ -946,13 +1059,15 @@ function discoverUPnPGateway(timeoutMs = 3500) {
                 cleanup();
                 let controlPath = serviceMatch[2].trim();
                 if (!controlPath.startsWith('/')) controlPath = '/' + controlPath;
-                resolve({
+                const gwObj = {
                   host: parsedUrl.hostname,
                   port: parsedUrl.port ? parseInt(parsedUrl.port, 10) : 80,
                   controlPath: controlPath,
                   serviceType: serviceMatch[1].trim(),
                   localIp: getLocalIpForGateway(parsedUrl.hostname)
-                });
+                };
+                cachedUPnPGateway = gwObj;
+                resolve(gwObj);
               }
             });
           }).on('error', () => {});
@@ -969,19 +1084,25 @@ function discoverUPnPGateway(timeoutMs = 3500) {
     });
 
     client.bind(0, () => {
-      try {
-        client.send(query, 0, query.length, 1900, '239.255.255.250');
-      } catch (err) {
-        cleanup();
-        reject(err);
-      }
+      const sendQuery = () => {
+        if (!resolved && client) {
+          try {
+            client.send(query, 0, query.length, 1900, '239.255.255.250');
+          } catch (e) {}
+        }
+      };
+
+      sendQuery();
+      // Repetition des requetes SSDP (200ms et 500ms) pour eviter toute perte sur Wi-Fi
+      burstTimers.push(setTimeout(sendQuery, 200));
+      burstTimers.push(setTimeout(sendQuery, 500));
     });
 
     timer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
         cleanup();
-        reject(new Error('Aucun routeur UPnP détecté sur votre réseau local (délai dépassé).'));
+        reject(new Error('Aucun routeur UPnP detecte sur votre reseau local (delai depasse).'));
       }
     }, timeoutMs);
   });
@@ -1066,9 +1187,22 @@ function isPrivateOrCGNAT(ip) {
 }
 
 async function testNetworkCompatibility(testPort = 25565) {
+  // Si au moins un serveur a deja une redirection UPnP active, la compatibilite routeur est confirmee a 100%
+  if (activeUPnPMappings.size > 0) {
+    const firstActive = activeUPnPMappings.values().next().value;
+    if (firstActive && firstActive.gateway) {
+      return {
+        compatible: true,
+        publicIp: firstActive.publicIp,
+        gatewayHost: firstActive.gateway.host,
+        localIp: firstActive.gateway.localIp
+      };
+    }
+  }
+
   let gateway = null;
   try {
-    gateway = await discoverUPnPGateway(3500);
+    gateway = await discoverUPnPGateway(5000);
   } catch (err) {
     return {
       compatible: false,
@@ -1097,15 +1231,46 @@ async function testNetworkCompatibility(testPort = 25565) {
     };
   }
 
-  try {
-    await addUPnPPortMapping(gateway, testPort, testPort, 'TCP', 'DesktopServer Test');
-    await deleteUPnPPortMapping(gateway, testPort, 'TCP');
-  } catch (err) {
+  // Ne JAMAIS tester ou ecraser un port utilise par un serveur actif
+  const activePorts = new Set();
+  for (const entry of activeUPnPMappings.values()) {
+    if (entry.port) activePorts.add(entry.port);
+  }
+
+  // Utiliser des ports ephemeres dedies aux diagnostics pour eviter tout conflit avec 25565+
+  const candidatePorts = [58941, 58942, 58943, 58944, 58945];
+  let mappingTested = false;
+  let lastError = null;
+
+  for (const candPort of candidatePorts) {
+    if (activePorts.has(candPort)) continue;
+    try {
+      try { await deleteUPnPPortMapping(gateway, candPort, 'TCP'); } catch (e) {}
+      await addUPnPPortMapping(gateway, candPort, candPort, 'TCP', 'DesktopServer Test');
+      await deleteUPnPPortMapping(gateway, candPort, 'TCP');
+      mappingTested = true;
+      break;
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+  }
+
+  if (!mappingTested) {
+    const isConflict = lastError && lastError.message && (lastError.message.includes('ConflictInMappingEntry') || lastError.message.includes('718'));
+    if (isConflict) {
+      return {
+        compatible: true,
+        publicIp,
+        gatewayHost: gateway.host,
+        localIp: gateway.localIp
+      };
+    }
     return {
       compatible: false,
       reason: 'mapping_failed',
       publicIp,
-      message: 'Le routeur a refusé l\'ouverture du port test via UPnP: ' + err.message
+      message: 'Le routeur a refusé l\'ouverture du port test via UPnP: ' + (lastError ? lastError.message : 'Erreur inconnue')
     };
   }
 
@@ -1344,7 +1509,10 @@ async function activateServerNetworking(serverId, serverPort, serverData) {
         });
       }
 
-      const gateway = await discoverUPnPGateway(3500);
+      const gateway = await discoverUPnPGateway(5000);
+      try {
+        await deleteUPnPPortMapping(gateway, serverPort, 'TCP');
+      } catch (e) {}
       await addUPnPPortMapping(gateway, serverPort, serverPort, 'TCP', `DesktopServer ${serverId}`);
       const publicIp = await getUPnPExternalIP(gateway);
 
@@ -2603,10 +2771,31 @@ ipcMain.handle('create-server', async (event, serverData) => {
     fs.mkdirSync(folderPath, { recursive: true });
   }
 
+  // Attribution d'un port reseau sans collision (garantit l'unicite pour l'UPnP multi-serveurs)
+  let assignedPort = serverData.port ? parseInt(serverData.port, 10) : 25565;
+  try {
+    const existingDirs = fs.readdirSync(serversDir);
+    const takenPorts = new Set();
+    for (const d of existingDirs) {
+      if (d === id) continue;
+      const sJson = path.join(serversDir, d, 'server.json');
+      if (fs.existsSync(sJson)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(sJson, 'utf8'));
+          if (parsed.port) takenPorts.add(parseInt(parsed.port, 10));
+        } catch (e) {}
+      }
+    }
+    while (takenPorts.has(assignedPort)) {
+      assignedPort++;
+    }
+  } catch (e) {}
+
   const completeData = {
     ...serverData,
     id,
     folderPath,
+    port: assignedPort,
     createdAt: serverData.createdAt || Date.now(),
     status: 'stopped',
     startupJar: serverData.startupJar || 'server.jar',
@@ -2749,8 +2938,25 @@ async function startServerInternal(serverId) {
   }
 
   // Détermination de l'exécutable Java adapté (avec réutilisation ou installation automatique)
+  const reqJavaVer = getRequiredJavaVersion(mcVersion);
   let javaCmd = 'java';
+  let isConfiguredJavaValid = false;
+
   if (configuredJava && (configuredJava === 'java' || fs.existsSync(configuredJava))) {
+    const currentDedicated = findExistingJavaRuntime(reqJavaVer);
+    if (configuredJava === currentDedicated && testJavaExecutable(configuredJava)) {
+      isConfiguredJavaValid = true;
+    } else if (configuredJava === 'java') {
+      const sysMajor = getSystemJavaMajorVersion();
+      if (sysMajor && sysMajor >= reqJavaVer && testJavaExecutable('java')) {
+        isConfiguredJavaValid = true;
+      }
+    } else if (configuredJava.includes(`java-${reqJavaVer}`) && testJavaExecutable(configuredJava)) {
+      isConfiguredJavaValid = true;
+    }
+  }
+
+  if (isConfiguredJavaValid) {
     javaCmd = configuredJava;
   } else {
     javaCmd = await getOrInstallJavaRuntime(mcVersion, (percent, cur, total, msg) => {
@@ -2764,9 +2970,13 @@ async function startServerInternal(serverId) {
     try {
       const json = JSON.parse(fs.readFileSync(path.join(folderPath, 'server.json'), 'utf8'));
       json.javaPath = javaCmd;
-      json.javaVersion = getRequiredJavaVersion(mcVersion);
+      json.javaVersion = reqJavaVer;
       fs.writeFileSync(path.join(folderPath, 'server.json'), JSON.stringify(json, null, 2), 'utf8');
     } catch (e) {}
+  }
+
+  if (process.platform === 'darwin') {
+    javaCmd = ensureMacJavaRunner(javaCmd);
   }
 
   let launchCmd = javaCmd;
@@ -3155,17 +3365,27 @@ ipcMain.handle('save-server-network-config', async (event, { serverId, config })
 // IPC : Tester la mise à jour d'un sous-domaine DuckDNS
 ipcMain.handle('test-duckdns', async (event, { domain, token }) => {
   let currentIp = '';
-  try {
-    const gateway = await discoverUPnPGateway(2000);
-    currentIp = await getUPnPExternalIP(gateway);
-  } catch (e) {}
+  if (activeUPnPMappings.size > 0) {
+    const first = activeUPnPMappings.values().next().value;
+    if (first && first.publicIp) currentIp = first.publicIp;
+  }
+  if (!currentIp) {
+    try {
+      const gateway = await discoverUPnPGateway(3000);
+      currentIp = await getUPnPExternalIP(gateway);
+    } catch (e) {}
+  }
   return await updateDuckDNS(domain, token, currentIp);
 });
 
 // IPC : Récupération rapide de l'IP publique
 ipcMain.handle('get-public-ip', async () => {
+  if (activeUPnPMappings.size > 0) {
+    const first = activeUPnPMappings.values().next().value;
+    if (first && first.publicIp) return { success: true, ip: first.publicIp };
+  }
   try {
-    const gateway = await discoverUPnPGateway(2000);
+    const gateway = await discoverUPnPGateway(3000);
     const ip = await getUPnPExternalIP(gateway);
     if (ip) return { success: true, ip };
   } catch (e) {}
