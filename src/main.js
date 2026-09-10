@@ -1021,6 +1021,43 @@ function getLocalIpForGateway(gatewayIp) {
   return '127.0.0.1';
 }
 
+function getDirectLocalIp(gatewayHost) {
+  return new Promise((resolve) => {
+    if (!gatewayHost) return resolve(null);
+    try {
+      const socket = dgram.createSocket('udp4');
+      socket.connect(80, gatewayHost, () => {
+        try {
+          const addr = socket.address();
+          socket.close();
+          if (addr && addr.address && addr.address !== '0.0.0.0' && !addr.address.startsWith('127.')) {
+            return resolve(addr.address);
+          }
+        } catch (e) {
+          try { socket.close(); } catch (_) {}
+        }
+        resolve(null);
+      });
+      socket.on('error', () => {
+        try { socket.close(); } catch (_) {}
+        resolve(null);
+      });
+      setTimeout(() => {
+        try { socket.close(); } catch (_) {}
+        resolve(null);
+      }, 500);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function resolveBestLocalIp(gatewayHost) {
+  const direct = await getDirectLocalIp(gatewayHost);
+  if (direct) return direct;
+  return getLocalIpForGateway(gatewayHost);
+}
+
 function verifyGatewayReachable(gw) {
   if (!gw || !gw.host || !gw.controlPath) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -1044,7 +1081,7 @@ async function discoverUPnPGateway(timeoutMs = 5000) {
   if (cachedUPnPGateway) {
     const isAlive = await verifyGatewayReachable(cachedUPnPGateway);
     if (isAlive) {
-      cachedUPnPGateway.localIp = getLocalIpForGateway(cachedUPnPGateway.host);
+      cachedUPnPGateway.localIp = await resolveBestLocalIp(cachedUPnPGateway.host);
       return cachedUPnPGateway;
     }
     cachedUPnPGateway = null;
@@ -1095,17 +1132,26 @@ async function discoverUPnPGateway(timeoutMs = 5000) {
               if (serviceMatch && !resolved) {
                 resolved = true;
                 cleanup();
-                let controlPath = serviceMatch[2].trim();
+                let rawControl = serviceMatch[2].trim();
+                let controlPath = rawControl;
+                if (rawControl.startsWith('http://') || rawControl.startsWith('https://')) {
+                  try {
+                    controlPath = new URL(rawControl).pathname;
+                  } catch (e) {}
+                }
                 if (!controlPath.startsWith('/')) controlPath = '/' + controlPath;
-                const gwObj = {
-                  host: parsedUrl.hostname,
-                  port: parsedUrl.port ? parseInt(parsedUrl.port, 10) : 80,
-                  controlPath: controlPath,
-                  serviceType: serviceMatch[1].trim(),
-                  localIp: getLocalIpForGateway(parsedUrl.hostname)
-                };
-                cachedUPnPGateway = gwObj;
-                resolve(gwObj);
+
+                resolveBestLocalIp(parsedUrl.hostname).then((bestIp) => {
+                  const gwObj = {
+                    host: parsedUrl.hostname,
+                    port: parsedUrl.port ? parseInt(parsedUrl.port, 10) : 80,
+                    controlPath: controlPath,
+                    serviceType: serviceMatch[1].trim(),
+                    localIp: bestIp
+                  };
+                  cachedUPnPGateway = gwObj;
+                  resolve(gwObj);
+                });
               }
             });
           }).on('error', () => {});
@@ -1175,7 +1221,24 @@ function sendUPnPSoap(gateway, action, innerXml) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(data);
         } else {
-          reject(new Error(`Erreur SOAP HTTP ${res.statusCode}: ${data.slice(0, 160)}`));
+          const codeMatch = data.match(/<errorCode>(\d+)<\/errorCode>/i);
+          const descMatch = data.match(/<errorDescription>([^<]+)<\/errorDescription>/i);
+          const errCode = codeMatch ? codeMatch[1] : null;
+          const errDesc = descMatch ? descMatch[1].trim() : null;
+
+          let msg = `Erreur SOAP HTTP ${res.statusCode}`;
+          if (errCode) {
+            msg += ` [Code UPnP ${errCode}${errDesc ? ': ' + errDesc : ''}]`;
+          } else {
+            const cleanSnippet = data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+            if (cleanSnippet) msg += `: ${cleanSnippet}`;
+          }
+          const err = new Error(msg);
+          err.statusCode = res.statusCode;
+          err.upnpCode = errCode ? parseInt(errCode, 10) : null;
+          err.upnpDesc = errDesc;
+          err.rawResponse = data;
+          reject(err);
         }
       });
     });
@@ -1190,22 +1253,68 @@ async function getUPnPExternalIP(gateway) {
   const data = await sendUPnPSoap(gateway, 'GetExternalIPAddress', '');
   const m = data.match(/<NewExternalIPAddress>([^<]+)<\/NewExternalIPAddress>/);
   if (m && m[1]) return m[1].trim();
-  throw new Error('Adresse IP externe introuvable dans la réponse SOAP.');
+  throw new Error('Adresse IP externe introuvable dans la reponse SOAP.');
+}
+
+async function getSpecificPortMappingEntry(gateway, externalPort, protocol = 'TCP') {
+  try {
+    const inner =
+      '  <NewRemoteHost></NewRemoteHost>\r\n' +
+      `  <NewExternalPort>${externalPort}</NewExternalPort>\r\n` +
+      `  <NewProtocol>${protocol.toUpperCase()}</NewProtocol>\r\n`;
+    const data = await sendUPnPSoap(gateway, 'GetSpecificPortMappingEntry', inner);
+    const clientMatch = data.match(/<NewInternalClient>([^<]+)<\/NewInternalClient>/i);
+    const portMatch = data.match(/<NewInternalPort>([^<]+)<\/NewInternalPort>/i);
+    const enabledMatch = data.match(/<NewEnabled>([^<]+)<\/NewEnabled>/i);
+    return {
+      internalClient: clientMatch ? clientMatch[1].trim() : null,
+      internalPort: portMatch ? parseInt(portMatch[1].trim(), 10) : null,
+      enabled: enabledMatch ? enabledMatch[1].trim() === '1' : true
+    };
+  } catch (err) {
+    return null;
+  }
 }
 
 async function addUPnPPortMapping(gateway, externalPort, internalPort, protocol = 'TCP', description = 'DesktopServer') {
+  const cleanDesc = (description || 'DesktopServer').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 32);
+  const targetIp = gateway.localIp || getLocalIpForGateway(gateway.host);
+
   const inner =
     '  <NewRemoteHost></NewRemoteHost>\r\n' +
     `  <NewExternalPort>${externalPort}</NewExternalPort>\r\n` +
     `  <NewProtocol>${protocol.toUpperCase()}</NewProtocol>\r\n` +
     `  <NewInternalPort>${internalPort}</NewInternalPort>\r\n` +
-    `  <NewInternalClient>${gateway.localIp}</NewInternalClient>\r\n` +
+    `  <NewInternalClient>${targetIp}</NewInternalClient>\r\n` +
     '  <NewEnabled>1</NewEnabled>\r\n' +
-    `  <NewPortMappingDescription>${description}</NewPortMappingDescription>\r\n` +
+    `  <NewPortMappingDescription>${cleanDesc}</NewPortMappingDescription>\r\n` +
     '  <NewLeaseDuration>0</NewLeaseDuration>\r\n';
 
-  await sendUPnPSoap(gateway, 'AddPortMapping', inner);
-  return true;
+  try {
+    await sendUPnPSoap(gateway, 'AddPortMapping', inner);
+    return true;
+  } catch (err) {
+    if (err.upnpCode === 718) {
+      // Conflit d'entree NAT : verifions si le port est deja mappe vers notre machine
+      const existing = await getSpecificPortMappingEntry(gateway, externalPort, protocol);
+      if (existing && existing.internalClient === targetIp && existing.internalPort === internalPort) {
+        // Le port est deja ouvert et redirige vers notre machine : succes transparent
+        return true;
+      }
+      // Tentative de suppression prealable puis re-mappage
+      try {
+        await deleteUPnPPortMapping(gateway, externalPort, protocol);
+        await sendUPnPSoap(gateway, 'AddPortMapping', inner);
+        return true;
+      } catch (retryErr) {
+        if (existing && existing.internalClient && existing.internalClient !== targetIp) {
+          throw new Error(`Le port ${externalPort} est deja reserve par un autre appareil du reseau (${existing.internalClient}). Modifiez le port du serveur dans ses parametres.`);
+        }
+        throw err;
+      }
+    }
+    throw err;
+  }
 }
 
 async function deleteUPnPPortMapping(gateway, externalPort, protocol = 'TCP') {
@@ -1214,7 +1323,12 @@ async function deleteUPnPPortMapping(gateway, externalPort, protocol = 'TCP') {
     `  <NewExternalPort>${externalPort}</NewExternalPort>\r\n` +
     `  <NewProtocol>${protocol.toUpperCase()}</NewProtocol>\r\n`;
 
-  await sendUPnPSoap(gateway, 'DeletePortMapping', inner);
+  try {
+    await sendUPnPSoap(gateway, 'DeletePortMapping', inner);
+  } catch (err) {
+    if (err.upnpCode === 714 || err.statusCode === 404) return true;
+    throw err;
+  }
   return true;
 }
 
@@ -1284,7 +1398,7 @@ async function testNetworkCompatibility(testPort = 25565) {
     if (activePorts.has(candPort)) continue;
     try {
       try { await deleteUPnPPortMapping(gateway, candPort, 'TCP'); } catch (e) {}
-      await addUPnPPortMapping(gateway, candPort, candPort, 'TCP', 'DesktopServer Test');
+      await addUPnPPortMapping(gateway, candPort, candPort, 'TCP', 'DesktopServer_Test');
       await deleteUPnPPortMapping(gateway, candPort, 'TCP');
       mappingTested = true;
       break;
@@ -1295,7 +1409,8 @@ async function testNetworkCompatibility(testPort = 25565) {
   }
 
   if (!mappingTested) {
-    const isConflict = lastError && lastError.message && (lastError.message.includes('ConflictInMappingEntry') || lastError.message.includes('718'));
+    const isConflict = (lastError && lastError.upnpCode === 718) ||
+                       (lastError && lastError.message && (lastError.message.includes('ConflictInMappingEntry') || lastError.message.includes('718')));
     if (isConflict) {
       return {
         compatible: true,
@@ -1308,7 +1423,7 @@ async function testNetworkCompatibility(testPort = 25565) {
       compatible: false,
       reason: 'mapping_failed',
       publicIp,
-      message: 'Le routeur a refusé l\'ouverture du port test via UPnP: ' + (lastError ? lastError.message : 'Erreur inconnue')
+      message: 'Le routeur a refuse l\'ouverture du port test via UPnP: ' + (lastError ? lastError.message : 'Erreur inconnue')
     };
   }
 
@@ -1551,7 +1666,7 @@ async function activateServerNetworking(serverId, serverPort, serverData) {
       try {
         await deleteUPnPPortMapping(gateway, serverPort, 'TCP');
       } catch (e) {}
-      await addUPnPPortMapping(gateway, serverPort, serverPort, 'TCP', `DesktopServer ${serverId}`);
+      await addUPnPPortMapping(gateway, serverPort, serverPort, 'TCP', `DesktopServer_${serverPort}`);
       const publicIp = await getUPnPExternalIP(gateway);
 
       let publicAddress = '';
