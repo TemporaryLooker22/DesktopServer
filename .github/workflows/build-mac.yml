@@ -26,6 +26,13 @@ jobs:
           npm install
           npm install --save-dev electron@26.6.9
 
+      - name: Build macOS 10.13 dyld shim (____chkstk_darwin)
+        run: |
+          mkdir -p bin/mac
+          clang -dynamiclib -arch x86_64 -arch arm64 -mmacosx-version-min=10.13 -install_name @rpath/libchkstk.dylib build/chkstk.S -o bin/mac/libchkstk.dylib || clang -dynamiclib -arch x86_64 -arch arm64 -mmacosx-version-min=10.13 -install_name @rpath/libchkstk.dylib build/chkstk.c -o bin/mac/libchkstk.dylib
+          ls -la bin/mac/libchkstk.dylib
+          nm -gU bin/mac/libchkstk.dylib
+
       - name: Build macOS DMG (macOS 10.13+ High Sierra & modern macOS)
         run: |
           npx electron-builder --mac --x64 -p never
@@ -46,4 +53,5 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+            bin/mac/*.dylib
           if-no-files-found: error

@@ -415,11 +415,37 @@ function extractArchive(archivePath, destDir) {
 }
 const extractZipArchive = extractArchive;
 
+// Shim dyld pour macOS 10.13 High Sierra (resout le symbole manquant ____chkstk_darwin pour Java 25)
+function getMacDyldShimPath() {
+  if (process.platform !== 'darwin') return null;
+  const candidates = [
+    path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function getMacDyldEnv() {
+  const shim = getMacDyldShimPath();
+  if (shim) {
+    return {
+      DYLD_FORCE_FLAT_NAMESPACE: '1',
+      DYLD_INSERT_LIBRARIES: shim
+    };
+  }
+  return {};
+}
+
 // Teste la validite reelle d'un executable Java (verifie l'absence de crash dyld ou de symboles manquants)
 function testJavaExecutable(javaPath) {
   if (!javaPath) return false;
   try {
-    const res = child_process.spawnSync(javaPath, ['-version'], { stdio: 'pipe', encoding: 'utf8', timeout: 5000 });
+    const env = { ...process.env, ...getMacDyldEnv() };
+    const res = child_process.spawnSync(javaPath, ['-version'], { stdio: 'pipe', encoding: 'utf8', timeout: 5000, env });
     return res.status === 0;
   } catch (e) {
     return false;
@@ -472,11 +498,6 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
   let targetJavaVer = getRequiredJavaVersion(mcVersion);
   const isMac = process.platform === 'darwin';
   const isArm64 = process.arch === 'arm64';
-
-  // Sur macOS < 11 (High Sierra, Mojave, Catalina), Java 21 est la version maximale supportee (100% compatible Minecraft)
-  if (isMacOlderThanBigSur() && targetJavaVer > 21) {
-    targetJavaVer = 21;
-  }
 
   // 1. REUTILISATION IMMÉDIATE si deja stocke et certifie fonctionnel (evite les runtimes corrompus ou dyld manquants)
   const existingDedicatedExe = findExistingJavaRuntime(targetJavaVer);
@@ -548,7 +569,8 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
       const staticFallbacks = {
         8: `https://github.com/bell-sw/Liberica/releases/download/8u504+1/bellsoft-jre8u504+1-macos-${archKey}.tar.gz`,
         17: `https://github.com/bell-sw/Liberica/releases/download/17.0.20.1+1/bellsoft-jre17.0.20.1+1-macos-${archKey}.tar.gz`,
-        21: `https://github.com/bell-sw/Liberica/releases/download/21.0.12.1+1/bellsoft-jre21.0.12.1+1-macos-${archKey}.tar.gz`
+        21: `https://github.com/bell-sw/Liberica/releases/download/21.0.12.1+1/bellsoft-jre21.0.12.1+1-macos-${archKey}.tar.gz`,
+        25: `https://github.com/bell-sw/Liberica/releases/download/25.0.2+12/bellsoft-jre25.0.2+12-macos-${archKey}.tar.gz`
       };
       downloadUrl = staticFallbacks[targetJavaVer] || `https://api.adoptium.net/v3/binary/latest/${targetJavaVer}/ga/mac/${isArm64 ? 'aarch64' : 'x64'}/jre/hotspot/normal/eclipse`;
     }
@@ -2036,11 +2058,16 @@ function getFallbackVersions() {
 ipcMain.handle('get-minecraft-versions', async () => {
   try {
     const manifest = await fetchJson('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json');
-    const latestRelease = manifest.latest?.release || '1.21.4';
+    let latestRelease = manifest.latest?.release || '1.21.4';
+    if (isMacOlderThanBigSur()) {
+      latestRelease = '1.21.4';
+    }
     const releases = manifest.versions.filter(v => v.type === 'release').map(v => v.id);
     return { latestRelease, releases };
   } catch (e) {
-    return getFallbackVersions();
+    const fb = getFallbackVersions();
+    if (isMacOlderThanBigSur()) fb.latestRelease = '1.21.4';
+    return fb;
   }
 });
 
@@ -2313,6 +2340,7 @@ function runJavaInstaller(folderPath, javaExe, installerPath, onProgress) {
     const proc = child_process.spawn(javaExe, ['-jar', jarName, '--installServer'], {
       cwd: folderPath,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, ...getMacDyldEnv() },
       shell: false
     });
 
@@ -2779,6 +2807,10 @@ async function startServerInternal(serverId) {
   } catch (e) {}
 
   freePortIfOccupied(serverPort);
+
+  if (process.platform === 'darwin') {
+    Object.assign(launchEnv, getMacDyldEnv());
+  }
 
   try {
     const proc = child_process.spawn(launchCmd, launchArgs, {
