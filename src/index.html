@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="system">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DesktopServer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Splashscreen initial : chargement épuré -->
+  <div id="splash" class="splashscreen">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Barre de navigation / titre personnalisée (sans bouton d'agrandissement) -->
+  <header class="titlebar">
+    <div class="titlebar-drag-area">
+      <div class="titlebar-brand">
+        <img src="assets/icon.png" class="brand-logo" alt="DesktopServer" width="15" height="15">
+        <span class="brand-title">DesktopServer</span>
+      </div>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btnWindowMinimize" class="titlebar-btn" type="button" aria-label="Réduire" data-i18n-title="titlebar_minimize">
+        <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+      </button>
+      <button id="btnWindowMaximize" class="titlebar-btn" type="button" aria-label="Agrandir / Restaurer" data-i18n-title="titlebar_maximize">
+        <svg id="iconWindowMaximize" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.1">
+          <rect x="1" y="1" width="8" height="8" rx="1.5"></rect>
+        </svg>
+      </button>
+      <button id="btnWindowClose" class="titlebar-btn titlebar-btn-close" type="button" aria-label="Fermer" data-i18n-title="titlebar_close">
+        <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.2"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- 1. Sidebar Principale -->
+    <aside id="sidebar-main" class="sidebar">
+      <div class="sidebar-brand-box">
+        <img src="assets/icon.png" class="sidebar-brand-icon" alt="DesktopServer" width="22" height="22">
+        <span class="sidebar-brand-name">DesktopServer</span>
+      </div>
+      <div class="sidebar-section">
+        <span class="sidebar-heading" data-i18n="nav_heading_nav">Navigation</span>
+        <nav class="sidebar-menu">
+          <button type="button" class="nav-item active" data-tab="servers">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+              <line x1="6" y1="6" x2="6.01" y2="6"></line>
+              <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            <span data-i18n="nav_servers">Serveurs</span>
+          </button>
+          <button type="button" class="nav-item" data-tab="settings">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span data-i18n="nav_settings">Paramètres</span>
+          </button>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- 2. Sidebar Dédiée au Serveur actif -->
+    <aside id="sidebar-server" class="sidebar" style="display: none;">
+      <div class="sidebar-top-action">
+        <button id="btnBackToServersList" class="btn-sidebar-back" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span data-i18n="btn_back_to_servers">Serveurs</span>
+        </button>
+      </div>
+
+      <div class="sidebar-server-info">
+        <span class="active-server-name" id="activeServerName">Mon Serveur</span>
+        <span class="active-server-version" id="activeServerBadge">Vanilla 1.21.4</span>
+      </div>
+
+      <div class="sidebar-section">
+        <span class="sidebar-heading" data-i18n="nav_heading_manage">Gestion</span>
+        <nav class="sidebar-menu">
+          <button type="button" class="server-nav-item active" data-server-tab="console">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            <span data-i18n="nav_console">Console</span>
+          </button>
+          <button type="button" class="server-nav-item" data-server-tab="performance">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+            </svg>
+            <span data-i18n="nav_performance">Performances</span>
+          </button>
+          <button type="button" class="server-nav-item" data-server-tab="files">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+              <polyline points="13 2 13 9 20 9"></polyline>
+            </svg>
+            <span data-i18n="nav_files">Fichiers</span>
+          </button>
+          <button type="button" class="server-nav-item" data-server-tab="properties">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            <span data-i18n="nav_properties">Propriétés</span>
+          </button>
+          <button type="button" class="server-nav-item" data-server-tab="network">
+            <svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span data-i18n="nav_network">Réseau</span>
+          </button>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Contenu principal -->
+    <main class="main-content">
+      <!-- VUES GLOBALES -->
+
+      <!-- Vue 1 : Liste des Serveurs -->
+      <section id="view-servers" class="tab-view active">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="servers_title">Serveurs</h1>
+            <p class="page-subtitle" data-i18n="servers_subtitle">Gérez vos instances locales Minecraft.</p>
+          </div>
+          <button id="btnHeaderNewServer" class="btn btn-with-icon" type="button" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span data-i18n="btn_new_server">Nouveau serveur</span>
+          </button>
+        </header>
+
+        <div class="servers-container">
+          <!-- État vide si aucun serveur -->
+          <div id="empty-state" class="empty-state">
+            <div class="empty-state-card">
+              <p class="empty-title" data-i18n="empty_servers_title">Aucun serveur disponible</p>
+              <p class="empty-desc" data-i18n="empty_servers_desc">Créez votre première instance Minecraft en quelques secondes.</p>
+              <button id="btnCreateServer" class="btn btn-with-icon" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="btn_empty_create">Créer un serveur</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Liste des serveurs (alignée en haut, non centrée) -->
+          <div id="servers-list" class="servers-list" style="display: none;"></div>
+        </div>
+      </section>
+
+      <!-- Vue 2 : Création de Serveur intégrée dans la page -->
+      <section id="view-create-server" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <div class="back-link-wrapper">
+              <button id="btnBackToServers" class="btn-link" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"></line>
+                  <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                <span data-i18n="btn_back_to_servers">Retour aux serveurs</span>
+              </button>
+            </div>
+            <h1 class="page-title" data-i18n="create_title">Créer un serveur</h1>
+            <p class="page-subtitle" id="create-step-subtitle" data-i18n="create_subtitle">Configurez une nouvelle instance Minecraft.</p>
+          </div>
+        </header>
+
+        <div class="create-server-container">
+          <div class="create-card">
+            <div id="step-1" class="wizard-step active">
+              <div class="form-group">
+                <label for="inputServerName" class="form-label" data-i18n="label_server_name">Nom du serveur</label>
+                <input type="text" id="inputServerName" class="input-text" data-i18n-placeholder="placeholder_server_name" placeholder="Mon Serveur Minecraft" maxlength="40" required>
+              </div>
+
+              <div class="form-group">
+                <div class="form-label-row">
+                  <label for="inputServerDesc" class="form-label" data-i18n="label_server_desc">Description (MOTD)</label>
+                  <span id="descCharCount" class="char-count">0 / 120</span>
+                </div>
+                <textarea id="inputServerDesc" class="input-textarea" data-i18n-placeholder="placeholder_server_desc" placeholder="Un serveur Minecraft propulsé par DesktopServer" maxlength="120" rows="3"></textarea>
+              </div>
+
+              <div class="card-footer">
+                <button id="btnCancelCreation" class="btn-subtle" type="button" data-i18n="btn_cancel">Annuler</button>
+                <button id="btnStep1Next" class="btn" type="button" data-i18n="btn_step1_next">Suivant</button>
+              </div>
+            </div>
+
+            <div id="step-2" class="wizard-step">
+              <div class="form-group">
+                <label class="form-label" data-i18n="label_engine_type">Type de serveur Minecraft</label>
+                <div class="engine-categories">
+                  <button type="button" class="engine-cat-btn active" data-category="plugins" data-i18n="cat_plugins">Officiel & Plugins</button>
+                  <button type="button" class="engine-cat-btn" data-category="mods" data-i18n="cat_mods">Mods</button>
+                  <button type="button" class="engine-cat-btn" data-category="hybrid" data-i18n="cat_hybrid">Hybride (Plugins + Mods)</button>
+                </div>
+
+                <div class="engine-group-wrapper">
+                  <!-- Groupe Officiel & Plugins -->
+                  <div class="engine-group active" data-category="plugins">
+                    <button type="button" class="type-option active" data-type="Paper" data-hint="Paper : Moteur de référence haute performance, support complet des plugins Bukkit et Spigot.">
+                      <span class="type-name">Paper</span>
+                      <span class="type-badge" data-i18n="badge_recommended">Recommandé</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Spigot" data-hint="Spigot : Le moteur classique de référence pour plugins Bukkit, stable et éprouvé.">
+                      <span class="type-name">Spigot</span>
+                      <span class="type-badge" data-i18n="badge_classic">Classique</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Purpur" data-hint="Purpur : Fork optimisé de Paper avec options étendues de personnalisation du gameplay.">
+                      <span class="type-name">Purpur</span>
+                      <span class="type-badge" data-i18n="badge_customizable">Personnalisable</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Vanilla" data-hint="Vanilla : Serveur officiel Mojang sans modifications, ni mods ni plugins.">
+                      <span class="type-name">Vanilla</span>
+                      <span class="type-badge" data-i18n="badge_official">Officiel</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Folia" data-hint="Folia : Moteur multithreadé par régions par PaperMC pour serveurs à grande échelle.">
+                      <span class="type-name">Folia</span>
+                      <span class="type-badge" data-i18n="badge_multithread">Multithread</span>
+                    </button>
+                  </div>
+
+                  <!-- Groupe Mods -->
+                  <div class="engine-group" data-category="mods">
+                    <button type="button" class="type-option" data-type="Fabric" data-hint="Fabric : Modloader moderne, très léger et optimisé pour les modpacks récents.">
+                      <span class="type-name">Fabric</span>
+                      <span class="type-badge" data-i18n="badge_modern">Moderne & Rapide</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Forge" data-hint="Forge : Modloader culte pour versions historiques (1.7.10, 1.12.2, 1.16.5, 1.20.1).">
+                      <span class="type-name">Forge</span>
+                      <span class="type-badge" data-i18n="badge_historic">Historique</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="NeoForge" data-hint="NeoForge : Successeur moderne officiel de Forge pour Minecraft 1.20.2 et supérieur.">
+                      <span class="type-name">NeoForge</span>
+                      <span class="type-badge" data-i18n="badge_standard">Standard 1.20.2+</span>
+                    </button>
+                  </div>
+
+                  <!-- Groupe Hybride -->
+                  <div class="engine-group" data-category="hybrid">
+                    <button type="button" class="type-option" data-type="Mohist" data-hint="Mohist : Hybride Forge + Paper permettant d'installer à la fois des mods et des plugins.">
+                      <span class="type-name">Mohist</span>
+                      <span class="type-badge" data-i18n="badge_forge_paper">Forge + Paper</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Arclight" data-hint="Arclight : Moteur hybride haute performance compatible Forge, NeoForge et Fabric.">
+                      <span class="type-name">Arclight</span>
+                      <span class="type-badge" data-i18n="badge_multiloader">Multi-loader</span>
+                    </button>
+                    <button type="button" class="type-option" data-type="Banner" data-hint="Banner : Hybride Fabric + Paper pour combiner mods Fabric et plugins Bukkit.">
+                      <span class="type-name">Banner</span>
+                      <span class="type-badge" data-i18n="badge_fabric_paper">Fabric + Paper</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div id="engineDetailHint" class="engine-hint">
+                  Paper : Moteur de référence haute performance, support complet des plugins Bukkit et Spigot.
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="selectMcVersion" class="form-label" id="labelMcVersion" data-i18n="label_mc_version">Version Minecraft compatible</label>
+                <select id="selectMcVersion" class="input-select">
+                  <option value="" disabled selected data-i18n="loading_versions">Chargement des versions compatibles...</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="inputMaxPlayers" class="form-label" data-i18n="label_max_players">Nombre max de joueurs</label>
+                <input type="number" id="inputMaxPlayers" class="input-text" value="20" min="1" max="500">
+                <span class="form-hint" data-i18n="hint_max_players">Valeur par défaut : 20 joueurs.</span>
+              </div>
+
+              <div class="form-row-ram" style="display: flex; gap: 14px; margin-bottom: 16px;">
+                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                  <label for="inputCreateRamMinVal" class="form-label" data-i18n="label_ram_min">RAM minimale (-Xms)</label>
+                  <div class="ram-input-group" style="width: 100%;">
+                    <input type="number" id="inputCreateRamMinVal" class="input-text ram-value-input" min="1" step="1" value="1" style="flex: 1;">
+                    <select id="inputCreateRamMinUnit" class="input-select ram-unit-select">
+                      <option value="GB" selected>GB</option>
+                      <option value="MB">MB</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                  <label for="inputCreateRamMaxVal" class="form-label" data-i18n="label_ram_max">RAM maximale (-Xmx)</label>
+                  <div class="ram-input-group" style="width: 100%;">
+                    <input type="number" id="inputCreateRamMaxVal" class="input-text ram-value-input" min="1" step="1" value="2" style="flex: 1;">
+                    <select id="inputCreateRamMaxUnit" class="input-select ram-unit-select">
+                      <option value="GB" selected>GB</option>
+                      <option value="MB">MB</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Indicateur de téléchargement réel du binaire server.jar -->
+              <div id="creationProgress" class="creation-progress" style="display: none;">
+                <div class="spinner-small"></div>
+                <span id="creationProgressText" data-i18n="progress_preparing">Téléchargement de server.jar...</span>
+              </div>
+
+              <div class="card-footer">
+                <button id="btnStep2Back" class="btn-subtle" type="button" data-i18n="btn_back">Retour</button>
+                <button id="btnValidateServer" class="btn" type="button" data-i18n="btn_validate_create">Valider</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vue 3 : Paramètres Globaux -->
+      <section id="view-settings" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="settings_title">Paramètres</h1>
+            <p class="page-subtitle" data-i18n="settings_subtitle">Préférences globales de l'application.</p>
+          </div>
+        </header>
+
+        <div class="settings-content">
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="settings_appearance">Apparence</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_theme">Thème</span>
+                  <span class="setting-subtext" data-i18n="settings_theme_subtext">Personnalisez l'affichage de l'interface.</span>
+                </div>
+                <div class="theme-picker">
+                  <button type="button" class="theme-option active" data-theme-val="system" data-i18n="theme_system">Système</button>
+                  <button type="button" class="theme-option" data-theme-val="light" data-i18n="theme_light">Clair</button>
+                  <button type="button" class="theme-option" data-theme-val="dark" data-i18n="theme_dark">Sombre</button>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_lang_label">Langue de l'interface</span>
+                  <span class="setting-subtext" data-i18n="settings_lang_subtext">Choisissez la langue d'affichage de DesktopServer.</span>
+                </div>
+                <div class="lang-picker">
+                  <button type="button" class="lang-option active" data-lang-val="fr">Français</button>
+                  <button type="button" class="lang-option" data-lang-val="en">English</button>
+                  <button type="button" class="lang-option" data-lang-val="es">Español</button>
+                  <button type="button" class="lang-option" data-lang-val="de">Deutsch</button>
+                  <button type="button" class="lang-option" data-lang-val="pt">Português</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="settings_general">Général</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_workspace_label">Nom de l'espace de travail</span>
+                  <span class="setting-subtext" data-i18n="settings_workspace_subtext">Identifiant affiché pour cette instance.</span>
+                </div>
+                <input type="text" class="input-text" value="Mon Espace" data-i18n-placeholder="placeholder_workspace" placeholder="Nom de l'espace">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_port_label">Port d'écoute par défaut</span>
+                  <span class="setting-subtext" data-i18n="settings_port_subtext">Port utilisé lors du lancement d'un serveur.</span>
+                </div>
+                <input type="text" class="input-text input-short" value="25565" placeholder="25565">
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="settings_notif_title">Notifications</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_notif_label">Notifications de statut</span>
+                  <span class="setting-subtext" data-i18n="settings_notif_subtext">Alerter lors des démarrages et arrêts de serveurs.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VUES DÉDIÉES AU SERVEUR ACTIF -->
+
+      <!-- Vue Dédiée 1 : Console avec interaction réelle -->
+      <section id="server-view-console" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="console_title">Console</h1>
+            <p class="page-subtitle" id="consoleServerMeta">Vanilla 1.21.4 • Port 25565</p>
+          </div>
+          <div class="header-actions">
+            <div id="upnpStatusBadge" class="tunnel-latency-badge badge-upnp" style="display: none;" title="Connexion directe UPnP (latence minimale 5-15 ms)">
+              <span class="latency-dot"></span>
+              <span id="upnpBadgeText" data-i18n="badge_upnp_text">UPnP Direct • 5-15 ms</span>
+            </div>
+            <div id="pinggyStatusBadge" class="tunnel-latency-badge badge-pinggy" style="display: none;" title="Relais automatique Pinggy (~20 ms)">
+              <span class="latency-dot"></span>
+              <span id="pinggyBadgeText" data-i18n="badge_pinggy_text">Pinggy • 20 ms</span>
+            </div>
+
+            <button id="btnCopyPublicIp" class="action-btn btn-action-secondary" type="button" style="display: none;" title="Copier l'adresse de connexion pour vos amis" data-i18n-title="tooltip_copy_ip">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span id="copyPublicIpLabel" data-i18n="btn_copy_ip">Copier l'IP</span>
+            </button>
+            <button id="btnConsoleRestart" class="action-btn btn-action-secondary" type="button" style="display: none;" title="Redémarrer le serveur">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span data-i18n="btn_restart">Redémarrer</span>
+            </button>
+            <button id="btnConsoleKill" class="action-btn btn-action-kill" type="button" style="display: none;" title="Forcer l'arrêt immédiat du processus (Kill)" data-i18n-title="tooltip_kill">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              <span data-i18n="btn_kill">Kill</span>
+            </button>
+            <button id="btnConsoleToggle" class="btn btn-compact" type="button">
+              <svg id="consoleToggleIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
+              </svg>
+              <span id="consoleToggleLabel" data-i18n="btn_start">Démarrer</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="console-wrapper">
+          <div class="console-logs" id="consoleLogs">
+            <!-- Logs en streaming direct de Java -->
+          </div>
+          <form id="consoleForm" class="console-input-bar">
+            <input type="text" id="consoleInput" class="console-input" data-i18n-placeholder="placeholder_cmd" placeholder="Envoyer une commande au serveur..." autocomplete="off">
+            <button type="submit" class="btn btn-action-send" data-i18n="btn_send_cmd">Envoyer</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Vue Dédiée 2 : Fichiers réels du serveur (Gestionnaire FTP complet) -->
+      <section id="server-view-files" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="files_title">Fichiers</h1>
+            <p class="page-subtitle" data-i18n="files_subtitle">Gestionnaire de fichiers et architecture du serveur avec transfert direct.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnOpenExplorer" class="action-btn btn-action-secondary" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span data-i18n="btn_open_explorer">Ouvrir dans l'Explorateur</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="files-container">
+          <!-- Barre d'outils FTP & Fil d'Ariane -->
+          <div class="files-toolbar">
+            <div class="files-breadcrumb" id="filesBreadcrumb">
+              <!-- Rempli dynamiquement (Racine / dossier / ...) -->
+            </div>
+            <div class="files-toolbar-actions">
+              <button id="btnUploadFile" class="action-btn btn-action-secondary" type="button" title="Téléverser des fichiers dans ce dossier" data-i18n-title="tooltip_upload">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span data-i18n="btn_upload">Téléverser</span>
+              </button>
+              <button id="btnNewFolder" class="action-btn btn-action-secondary" type="button" title="Créer un nouveau dossier" data-i18n-title="tooltip_new_folder">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <line x1="12" y1="11" x2="12" y2="17"></line>
+                  <line x1="9" y1="14" x2="15" y2="14"></line>
+                </svg>
+                <span data-i18n="btn_folder">Dossier</span>
+              </button>
+              <button id="btnNewFile" class="action-btn btn-action-secondary" type="button" title="Créer un nouveau fichier texte" data-i18n-title="tooltip_new_file">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <span data-i18n="btn_file">Fichier</span>
+              </button>
+              <button id="btnRefreshFiles" class="action-btn btn-action-secondary" type="button" title="Actualiser la liste" data-i18n-title="tooltip_refresh">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Zone de dépôt (Drag & Drop) et Table de fichiers -->
+          <div class="files-dropzone" id="filesDropzone">
+            <div class="files-drop-overlay" id="filesDropOverlay">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span class="files-drop-text" data-i18n="files_drop_text">Déposez vos fichiers ici pour les importer</span>
+              <span class="files-drop-subtext" data-i18n="files_drop_subtext">Ils seront copiés directement dans le dossier actuel.</span>
+            </div>
+
+            <div class="files-table-card">
+              <div class="files-table-header">
+                <span class="file-col-name" data-i18n="file_col_name">Nom</span>
+                <span class="file-col-size" data-i18n="file_col_size">Taille</span>
+                <span class="file-col-date" data-i18n="file_col_date">Dernière modification</span>
+                <span class="file-col-actions" data-i18n="file_col_actions">Actions</span>
+              </div>
+              <div id="filesList" class="files-table-body">
+                <!-- Rempli dynamiquement avec icônes de type -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Panneau d'édition de fichier rapide -->
+          <div id="fileEditorPanel" class="file-editor-card" style="display: none;">
+            <div class="file-editor-header">
+              <div class="file-editor-name">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-icon config-icon">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span id="fileEditorTitle">server.properties</span>
+              </div>
+              <div class="file-editor-actions">
+                <button id="btnSaveFile" class="btn" style="padding: 6px 14px; font-size: 13px;" type="button" data-i18n="btn_save_file">Enregistrer</button>
+                <button id="btnCloseFileEditor" class="btn-subtle" style="padding: 6px 12px; font-size: 13px;" type="button" data-i18n="btn_close_editor">Fermer</button>
+              </div>
+            </div>
+            <textarea id="fileEditorText" class="file-editor-textarea" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vue Dédiée 3 : Paramètres server.properties -->
+      <section id="server-view-properties" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="prop_title">Paramètres du serveur</h1>
+            <p class="page-subtitle" data-i18n="prop_subtitle">Modification directe du fichier server.properties.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnSaveProperties" class="btn" type="button" data-i18n="btn_save_prop">
+              Enregistrer les modifications
+            </button>
+          </div>
+        </header>
+
+        <div class="settings-content">
+          <!-- Barre de filtre par catégorie et de recherche rapide -->
+          <div class="prop-search-container">
+            <div class="prop-filters-bar">
+              <div class="prop-category-wrapper">
+                <label for="propCategoryFilter" class="prop-filter-label" data-i18n="prop_filter_label">Catégorie</label>
+                <select id="propCategoryFilter" class="input-select prop-cat-select">
+                  <option value="server" data-i18n="prop_cat_server">Serveur</option>
+                  <option value="general" data-i18n="prop_cat_general">Général &amp; Réseau</option>
+                  <option value="gameplay" data-i18n="prop_cat_gameplay">Gameplay &amp; Règles</option>
+                  <option value="world" data-i18n="prop_cat_world">Monde &amp; Génération</option>
+                  <option value="entities" data-i18n="prop_cat_entities">Créatures &amp; Entités</option>
+                  <option value="security" data-i18n="prop_cat_security">Sécurité &amp; Whitelist</option>
+                  <option value="packs" data-i18n="prop_cat_packs">Packs de ressources &amp; Données</option>
+                  <option value="tunnel" data-i18n="prop_cat_tunnel">Réseau &amp; Tunnel</option>
+                  <option value="custom" data-i18n="prop_cat_custom">Paramètres personnalisés</option>
+                </select>
+              </div>
+              <div class="prop-search-wrapper">
+                <input type="text" id="propSearchInput" class="input-text prop-search-input" data-i18n-placeholder="placeholder_search_props" placeholder="Rechercher un paramètre (jar, ram, motd, port, seed, rcon...)..." autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <!-- 0. Catégorie Serveur & Démarrage -->
+          <div class="settings-group" data-group="server">
+            <h2 class="group-title" data-i18n="prop_grp_server">Serveur</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_jar_label">Fichier JAR de démarrage (startupJar)</span>
+                  <span class="setting-subtext" data-i18n="prop_jar_desc">Sélectionnez le fichier exécutable Java (.jar) utilisé pour démarrer le serveur.</span>
+                </div>
+                <div class="jar-picker-control">
+                  <select id="propStartupJar" class="input-select input-medium">
+                    <option value="server.jar" data-i18n="default_jar_option">server.jar (Défaut)</option>
+                  </select>
+                  <button id="btnRefreshJars" class="action-btn btn-action-secondary" type="button" title="Actualiser les fichiers JAR" data-i18n-title="tooltip_refresh_jars">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                  </button>
+                  <button id="btnBrowseJar" class="action-btn btn-action-secondary" type="button" title="Choisir ou importer un JAR depuis vos fichiers" data-i18n-title="tooltip_browse_jar">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span data-i18n="btn_browse">Parcourir...</span>
+                  </button>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_ram_min_label">Allocation RAM minimale (-Xms)</span>
+                  <span class="setting-subtext" data-i18n="prop_ram_min_desc">Quantité minimale de mémoire vive allouée au démarrage du serveur.</span>
+                </div>
+                <div class="ram-input-group">
+                  <input type="number" id="propRamMinValue" class="input-text ram-value-input" min="1" step="1" value="1" placeholder="1">
+                  <select id="propRamMinUnit" class="input-select ram-unit-select">
+                    <option value="GB" selected>GB</option>
+                    <option value="MB">MB</option>
+                  </select>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_ram_max_label">Allocation RAM maximale (-Xmx)</span>
+                  <span class="setting-subtext" data-i18n="prop_ram_max_desc">Quantité maximale de mémoire vive allouée au serveur.</span>
+                </div>
+                <div class="ram-input-group">
+                  <input type="number" id="propRamMaxValue" class="input-text ram-value-input" min="1" step="1" value="2" placeholder="2">
+                  <select id="propRamMaxUnit" class="input-select ram-unit-select">
+                    <option value="GB" selected>GB</option>
+                    <option value="MB">MB</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1. Configuration générale & Réseau -->
+          <div class="settings-group" data-group="general">
+            <h2 class="group-title" data-i18n="prop_grp_general">Général & Réseau</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_motd_label">Message du jour (motd)</span>
+                  <span class="setting-subtext" data-i18n="prop_motd_desc">Description visible dans la liste des serveurs du jeu.</span>
+                </div>
+                <input type="text" id="propMotd" class="input-text input-wide">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_port_label">Port d'écoute (server-port)</span>
+                  <span class="setting-subtext" data-i18n="prop_port_desc">Port réseau sur lequel écoute le serveur Minecraft (défaut 25565).</span>
+                </div>
+                <input type="number" id="propPort" class="input-text input-short" min="1" max="65535">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_server_ip_label">Adresse IP de liaison (server-ip)</span>
+                  <span class="setting-subtext" data-i18n="prop_server_ip_desc">Laisser vide pour écouter sur toutes les interfaces réseau.</span>
+                </div>
+                <input type="text" id="propServerIp" class="input-text input-medium" data-i18n-placeholder="prop_placeholder_server_ip" placeholder="Par défaut : toutes">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_max_players_label">Joueurs maximum (max-players)</span>
+                  <span class="setting-subtext" data-i18n="prop_max_players_desc">Limite de joueurs connectés simultanément.</span>
+                </div>
+                <input type="number" id="propMaxPlayers" class="input-text input-short" min="1" max="10000">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_enable_status_label">Visible dans la liste des serveurs (enable-status)</span>
+                  <span class="setting-subtext" data-i18n="prop_enable_status_desc">Indique si le serveur répond au ping des clients Minecraft.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propEnableStatus">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_hide_players_label">Masquer la liste des joueurs (hide-online-players)</span>
+                  <span class="setting-subtext" data-i18n="prop_hide_players_desc">Ne révèle pas la liste des pseudonymes lors du ping du serveur.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propHideOnlinePlayers">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_compression_label">Seuil de compression réseau (network-compression-threshold)</span>
+                  <span class="setting-subtext" data-i18n="prop_compression_desc">Taille minimale d'un paquet en octets avant compression (-1 pour désactiver, 256 par défaut).</span>
+                </div>
+                <input type="number" id="propNetworkCompressionThreshold" class="input-text input-short" min="-1" max="65535">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_tick_time_label">Délai watchdog par tick (max-tick-time)</span>
+                  <span class="setting-subtext" data-i18n="prop_tick_time_desc">Temps maximum en millisecondes d'un tick avant arrêt d'urgence (-1 pour désactiver).</span>
+                </div>
+                <input type="number" id="propMaxTickTime" class="input-text input-medium" min="-1" max="9999999">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_rate_limit_label">Limite de paquets par joueur (rate-limit)</span>
+                  <span class="setting-subtext" data-i18n="prop_rate_limit_desc">Nombre maximal de paquets reçus par seconde avant exclusion (0 = désactivé).</span>
+                </div>
+                <input type="number" id="propRateLimit" class="input-text input-short" min="0" max="10000">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_prevent_proxy_label">Bloquer les proxys / VPN (prevent-proxy-connections)</span>
+                  <span class="setting-subtext" data-i18n="prop_prevent_proxy_desc">Empêche les joueurs d'utiliser un proxy ou VPN si vérifiable.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propPreventProxyConnections">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_native_transport_label">Transport réseau natif (use-native-transport)</span>
+                  <span class="setting-subtext" data-i18n="prop_native_transport_desc">Optimisations réseau natives du système d'exploitation.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propUseNativeTransport">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_accepts_transfers_label">Accepter les transferts de serveurs (accepts-transfers)</span>
+                  <span class="setting-subtext" data-i18n="prop_accepts_transfers_desc">Permet les transferts entrants vers ce serveur (Minecraft 1.20.5+).</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propAcceptsTransfers">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Gameplay & Règles du jeu -->
+          <div class="settings-group" data-group="gameplay">
+            <h2 class="group-title" data-i18n="prop_grp_gameplay">Gameplay & Règles de jeu</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_gamemode_label">Mode de jeu (gamemode)</span>
+                  <span class="setting-subtext" data-i18n="prop_gamemode_desc">Mode attribué par défaut aux nouveaux joueurs.</span>
+                </div>
+                <select id="propGamemode" class="input-select input-medium">
+                  <option value="survival" data-i18n="opt_gamemode_survival">Survie (survival)</option>
+                  <option value="creative" data-i18n="opt_gamemode_creative">Créatif (creative)</option>
+                  <option value="adventure" data-i18n="opt_gamemode_adventure">Aventure (adventure)</option>
+                  <option value="spectator" data-i18n="opt_gamemode_spectator">Spectateur (spectator)</option>
+                </select>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_force_gamemode_label">Forcer le mode de jeu (force-gamemode)</span>
+                  <span class="setting-subtext" data-i18n="prop_force_gamemode_desc">Réinitialise le joueur sur le mode par défaut à chaque connexion.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propForceGamemode">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_difficulty_label">Difficulté (difficulty)</span>
+                  <span class="setting-subtext" data-i18n="prop_difficulty_desc">Agressivité des monstres et contraintes de survie.</span>
+                </div>
+                <select id="propDifficulty" class="input-select input-medium">
+                  <option value="peaceful" data-i18n="opt_diff_peaceful">Paisible (peaceful)</option>
+                  <option value="easy" data-i18n="opt_diff_easy">Facile (easy)</option>
+                  <option value="normal" data-i18n="opt_diff_normal">Normal (normal)</option>
+                  <option value="hard" data-i18n="opt_diff_hard">Difficile (hard)</option>
+                </select>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_hardcore_label">Mode Hardcore (hardcore)</span>
+                  <span class="setting-subtext" data-i18n="prop_hardcore_desc">La mort d'un joueur est permanente et le bannie du serveur.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propHardcore">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_pvp_label">Combats Joueur contre Joueur (pvp)</span>
+                  <span class="setting-subtext" data-i18n="prop_pvp_desc">Autorise les dégâts directs et attaques entre joueurs.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propPvp">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_allow_flight_label">Autoriser le vol (allow-flight)</span>
+                  <span class="setting-subtext" data-i18n="prop_allow_flight_desc">Empêche les expulsions automatiques des joueurs qui volent en mode survie.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propAllowFlight">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_spawn_protection_label">Rayon de protection du spawn (spawn-protection)</span>
+                  <span class="setting-subtext" data-i18n="prop_spawn_protection_desc">Rayon en blocs protégé des modifications par les non-opérateurs (0 = désactivé).</span>
+                </div>
+                <input type="number" id="propSpawnProtection" class="input-text input-short" min="0" max="1000">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_player_idle_label">Délai d'inactivité avant exclusion (player-idle-timeout)</span>
+                  <span class="setting-subtext" data-i18n="prop_player_idle_desc">Temps d'attente en minutes avant d'expulser un joueur inactif (0 = jamais).</span>
+                </div>
+                <input type="number" id="propPlayerIdleTimeout" class="input-text input-short" min="0" max="1440">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_pause_empty_label">Pause du monde si serveur vide (pause-when-empty-seconds)</span>
+                  <span class="setting-subtext" data-i18n="prop_pause_empty_desc">Suspend la progression temporelle après N secondes sans joueur (-1 pour désactiver).</span>
+                </div>
+                <input type="number" id="propPauseWhenEmptySeconds" class="input-text input-short" min="-1" max="86400">
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Monde & Génération -->
+          <div class="settings-group" data-group="world">
+            <h2 class="group-title" data-i18n="prop_grp_world">Monde & Génération</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_level_name_label">Nom du monde (level-name)</span>
+                  <span class="setting-subtext" data-i18n="prop_level_name_desc">Nom du dossier contenant la carte du monde sauvegardée.</span>
+                </div>
+                <input type="text" id="propLevelName" class="input-text input-medium">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_level_seed_label">Graine de génération (level-seed)</span>
+                  <span class="setting-subtext" data-i18n="prop_level_seed_desc">Seed utilisé pour la génération procédurale du terrain (laisser vide pour aléatoire).</span>
+                </div>
+                <input type="text" id="propLevelSeed" class="input-text input-medium" data-i18n-placeholder="prop_placeholder_level_seed" placeholder="Aléatoire">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_level_type_label">Type de monde (level-type)</span>
+                  <span class="setting-subtext" data-i18n="prop_level_type_desc">Profil de génération du relief et des biomes.</span>
+                </div>
+                <select id="propLevelType" class="input-select input-medium">
+                  <option value="minecraft:normal" data-i18n="opt_level_normal">Normal (minecraft:normal)</option>
+                  <option value="minecraft:flat" data-i18n="opt_level_flat">Plat (minecraft:flat)</option>
+                  <option value="minecraft:large_biomes" data-i18n="opt_level_large_biomes">Grands biomes (minecraft:large_biomes)</option>
+                  <option value="minecraft:amplified" data-i18n="opt_level_amplified">Amplifié (minecraft:amplified)</option>
+                </select>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_generator_settings_label">Paramètres du générateur (generator-settings)</span>
+                  <span class="setting-subtext" data-i18n="prop_generator_settings_desc">Chaîne JSON personnalisée pour les mondes plats ou personnalisés.</span>
+                </div>
+                <input type="text" id="propGeneratorSettings" class="input-text input-wide" placeholder="{}">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_generate_structures_label">Générer les structures (generate-structures)</span>
+                  <span class="setting-subtext" data-i18n="prop_generate_structures_desc">Construit les villages, temples, forteresses et donjons.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propGenerateStructures">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_allow_nether_label">Autoriser le Nether (allow-nether)</span>
+                  <span class="setting-subtext" data-i18n="prop_allow_nether_desc">Active les portails et la dimension du Nether.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propAllowNether">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_view_distance_label">Distance de vue (view-distance)</span>
+                  <span class="setting-subtext" data-i18n="prop_view_distance_desc">Portée d'affichage des morceaux envoyée aux joueurs (chunks, 2 à 32).</span>
+                </div>
+                <input type="number" id="propViewDistance" class="input-text input-short" min="2" max="32">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_sim_distance_label">Distance de simulation (simulation-distance)</span>
+                  <span class="setting-subtext" data-i18n="prop_sim_distance_desc">Rayon de calcul de l'IA, de la physique et de la pousse (chunks, 3 à 32).</span>
+                </div>
+                <input type="number" id="propSimulationDistance" class="input-text input-short" min="3" max="32">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_max_world_size_label">Taille maximale du monde (max-world-size)</span>
+                  <span class="setting-subtext" data-i18n="prop_max_world_size_desc">Rayon maximal en blocs de la bordure du monde (défaut 29999984).</span>
+                </div>
+                <input type="number" id="propMaxWorldSize" class="input-text input-medium" min="1" max="29999984">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_sync_chunk_writes_label">Écriture synchrone des chunks (sync-chunk-writes)</span>
+                  <span class="setting-subtext" data-i18n="prop_sync_chunk_writes_desc">Force la sauvegarde synchrone des données sur le disque dur.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propSyncChunkWrites">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Créatures & Entités -->
+          <div class="settings-group" data-group="entities">
+            <h2 class="group-title" data-i18n="prop_grp_entities">Créatures & Entités</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_spawn_animals_label">Apparition des animaux (spawn-animals)</span>
+                  <span class="setting-subtext" data-i18n="prop_spawn_animals_desc">Autorise la génération naturelle des animaux passifs (vaches, moutons, cochons...).</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propSpawnAnimals">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_spawn_monsters_label">Apparition des monstres (spawn-monsters)</span>
+                  <span class="setting-subtext" data-i18n="prop_spawn_monsters_desc">Autorise la génération naturelle des monstres agressifs (zombies, creepers, squelettes...).</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propSpawnMonsters">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_spawn_npcs_label">Apparition des villageois et PNJ (spawn-npcs)</span>
+                  <span class="setting-subtext" data-i18n="prop_spawn_npcs_desc">Autorise la présence et l'apparition des villageois et marchands ambulants.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propSpawnNpcs">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_entity_range_label">Portée de visibilité des entités (entity-broadcast-range-percentage)</span>
+                  <span class="setting-subtext" data-i18n="prop_entity_range_desc">Pourcentage de distance à laquelle les créatures sont envoyées aux clients (10% à 1000%).</span>
+                </div>
+                <input type="number" id="propEntityBroadcastRangePercentage" class="input-text input-short" min="10" max="1000">
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Sécurité, Whitelist & Administration -->
+          <div class="settings-group" data-group="security">
+            <h2 class="group-title" data-i18n="prop_grp_security">Sécurité, Whitelist & Administration</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_online_mode_label">Authentification en ligne (online-mode)</span>
+                  <span class="setting-subtext" data-i18n="prop_online_mode_desc">Vérifie l'authenticité des comptes auprès des serveurs officiels Mojang/Microsoft.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propOnlineMode">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_whitelist_label">Liste blanche (white-list)</span>
+                  <span class="setting-subtext" data-i18n="prop_whitelist_desc">Seuls les joueurs explicitement répertoriés dans whitelist.json peuvent se connecter.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propWhiteList">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_enforce_whitelist_label">Application stricte de la liste blanche (enforce-whitelist)</span>
+                  <span class="setting-subtext" data-i18n="prop_enforce_whitelist_desc">Expulse immédiatement les joueurs connectés qui ne sont plus dans la liste blanche.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propEnforceWhitelist">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_secure_profile_label">Profils de chat sécurisés (enforce-secure-profile)</span>
+                  <span class="setting-subtext" data-i18n="prop_secure_profile_desc">Exige la signature cryptographique des messages de chat par le compte Mojang.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propEnforceSecureProfile">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_log_ips_label">Journaliser les adresses IP (log-ips)</span>
+                  <span class="setting-subtext" data-i18n="prop_log_ips_desc">Affiche l'adresse IP des joueurs lors de leur connexion dans les journaux console.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propLogIps">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_enable_rcon_label">Activer l'accès RCON (enable-rcon)</span>
+                  <span class="setting-subtext" data-i18n="prop_enable_rcon_desc">Permet d'envoyer des commandes de console à distance via le protocole RCON.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propEnableRcon">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_rcon_port_label">Port RCON (rcon.port)</span>
+                  <span class="setting-subtext" data-i18n="prop_rcon_port_desc">Port réseau utilisé par le service de télécommande RCON (défaut 25575).</span>
+                </div>
+                <input type="number" id="propRconPort" class="input-text input-short" min="1" max="65535">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_rcon_password_label">Mot de passe RCON (rcon.password)</span>
+                  <span class="setting-subtext" data-i18n="prop_rcon_password_desc">Mot de passe secret exigé pour l'accès aux commandes distantes.</span>
+                </div>
+                <input type="password" id="propRconPassword" class="input-text input-medium" data-i18n-placeholder="prop_placeholder_rcon_password" placeholder="Mot de passe secret">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_broadcast_rcon_label">Diffuser RCON aux opérateurs (broadcast-rcon-to-ops)</span>
+                  <span class="setting-subtext" data-i18n="prop_broadcast_rcon_desc">Notifie les opérateurs en jeu des commandes exécutées par RCON.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propBroadcastRconToOps">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_broadcast_console_label">Diffuser la console aux opérateurs (broadcast-console-to-ops)</span>
+                  <span class="setting-subtext" data-i18n="prop_broadcast_console_desc">Notifie les opérateurs en jeu des commandes exécutées sur la console serveur.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propBroadcastConsoleToOps">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_enable_query_label">Activer Query GameSpy4 (enable-query)</span>
+                  <span class="setting-subtext" data-i18n="prop_enable_query_desc">Permet aux outils de surveillance et sites web d'interroger l'état du serveur.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propEnableQuery">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_query_port_label">Port Query (query.port)</span>
+                  <span class="setting-subtext" data-i18n="prop_query_port_desc">Port réseau utilisé par le protocole Query (défaut 25565).</span>
+                </div>
+                <input type="number" id="propQueryPort" class="input-text input-short" min="1" max="65535">
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Packs de ressources & Données -->
+          <div class="settings-group" data-group="packs">
+            <h2 class="group-title" data-i18n="prop_grp_packs">Packs de ressources & Données</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_resource_pack_label">URL du pack de ressources (resource-pack)</span>
+                  <span class="setting-subtext" data-i18n="prop_resource_pack_desc">Lien HTTP direct (fichier .zip) proposé aux joueurs à leur arrivée.</span>
+                </div>
+                <input type="text" id="propResourcePack" class="input-text input-wide" placeholder="https://exemple.com/pack.zip">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_resource_pack_prompt_label">Message d'invite du pack (resource-pack-prompt)</span>
+                  <span class="setting-subtext" data-i18n="prop_resource_pack_prompt_desc">Texte explicatif présenté au joueur pour l'inciter à accepter le pack.</span>
+                </div>
+                <input type="text" id="propResourcePackPrompt" class="input-text input-wide">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_require_pack_label">Pack obligatoire pour jouer (require-resource-pack)</span>
+                  <span class="setting-subtext" data-i18n="prop_require_pack_desc">Refuse la connexion aux joueurs qui refusent de télécharger le pack.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="propRequireResourcePack">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_pack_sha1_label">Somme de contrôle SHA-1 (resource-pack-sha1)</span>
+                  <span class="setting-subtext" data-i18n="prop_pack_sha1_desc">Empreinte SHA-1 en minuscules (40 caractères) pour valider l'intégrité du pack.</span>
+                </div>
+                <input type="text" id="propResourcePackSha1" class="input-text input-wide" placeholder="Ex: 2b34a6e8...">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_pack_id_label">UUID du pack (resource-pack-id)</span>
+                  <span class="setting-subtext" data-i18n="prop_pack_id_desc">Identifiant UUID unique du pack de ressources.</span>
+                </div>
+                <input type="text" id="propResourcePackId" class="input-text input-medium" data-i18n-placeholder="prop_placeholder_optional" placeholder="Optionnel">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_init_enabled_packs_label">Data packs activés au démarrage (initial-enabled-packs)</span>
+                  <span class="setting-subtext" data-i18n="prop_init_enabled_packs_desc">Liste des data packs activés par défaut lors de la création du monde (défaut 'vanilla').</span>
+                </div>
+                <input type="text" id="propInitialEnabledPacks" class="input-text input-medium" placeholder="vanilla">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_init_disabled_packs_label">Data packs désactivés au démarrage (initial-disabled-packs)</span>
+                  <span class="setting-subtext" data-i18n="prop_init_disabled_packs_desc">Liste des data packs désactivés d'office au premier lancement.</span>
+                </div>
+                <input type="text" id="propInitialDisabledPacks" class="input-text input-medium">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_bug_report_link_label">Lien de signalement de bugs (bug-report-link)</span>
+                  <span class="setting-subtext" data-i18n="prop_bug_report_link_desc">URL personnalisée affichée aux joueurs pour signaler les problèmes (Minecraft 1.20.5+).</span>
+                </div>
+                <input type="text" id="propBugReportLink" class="input-text input-wide" placeholder="https://votresite.com/support">
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. Réseau & Connexion multijoueur -->
+          <div class="settings-group" data-group="network">
+            <h2 class="group-title" data-i18n="prop_grp_network">Réseau & Connexion multijoueur</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_net_mode_summary_label">Mode de routage réseau actif</span>
+                  <span class="setting-subtext" id="propNetworkModeSummary" data-i18n="badge_upnp_text">UPnP Direct • 5-15 ms</span>
+                </div>
+                <button id="btnSettingsReconfigureNetwork" class="action-btn btn-action-secondary" type="button" data-i18n="btn_configure_net">
+                  Configurer le réseau
+                </button>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_duck_subdomain_label">Sous-domaine DuckDNS</span>
+                  <span class="setting-subtext" data-i18n="prop_duck_subdomain_desc">Nom d'hôte fixe *.duckdns.org synchronisé automatiquement si votre box redémarre.</span>
+                </div>
+                <input type="text" id="propDuckSubdomain" class="input-text input-wide" data-i18n-placeholder="placeholder_duck_subdomain" placeholder="mon-serveur">
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="prop_duck_token_label">Jeton DuckDNS (Token)</span>
+                  <span class="setting-subtext" data-i18n="prop_duck_token_desc">Jeton de compte DuckDNS privé pour la synchronisation automatique de l'IP.</span>
+                </div>
+                <input type="password" id="propDuckToken" class="input-text input-wide" data-i18n-placeholder="placeholder_duck_token" placeholder="Collez votre token DuckDNS">
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. Clés additionnelles & Paramètres personnalisés -->
+          <div class="settings-group" data-group="custom">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-right: 2px;">
+              <h2 class="group-title" style="margin: 0;" data-i18n="prop_grp_custom">Paramètres personnalisés & Avancés</h2>
+              <button id="btnAddCustomProp" class="action-btn btn-action-secondary" type="button" style="padding: 5px 12px; font-size: 12px;" data-i18n="btn_add_custom_prop">
+                + Ajouter une clé
+              </button>
+            </div>
+            <div class="setting-card">
+              <div id="customPropertiesList">
+                <!-- Rempli dynamiquement pour toute clé inconnue ou personnalisée -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vue Dédiée 4 : Accès Réseau & Connexions Publiques -->
+      <section id="server-view-network" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="net_title">Accès Réseau & Multijoueur</h1>
+            <p class="page-subtitle" id="networkServerMeta" data-i18n="net_subtitle">Gestion de la connectivité externe, routage des ports et diagnostic de compatibilité de votre box.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnTabRerunDiagHeader" class="action-btn btn-action-secondary" type="button" title="Tester à nouveau la compatibilité UPnP de votre box">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span data-i18n="btn_diag_rerun">Relancer le diagnostic</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="settings-content">
+          <!-- 1. Carte Héro : Statut en direct et Adresse de connexion -->
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="net_status_header" data-i18n="net_status_live">Statut de connexion en direct</h2>
+            <div class="setting-card">
+              <div class="setting-row" style="padding: 18px 20px;">
+                <div class="setting-info">
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                    <span class="setting-label" style="font-size: 15px;" data-i18n="net_connect_addr" data-i18n="net_addr_for_players">Adresse publique pour vos joueurs</span>
+                    <span id="netTabBadgeActive" class="tunnel-latency-badge badge-upnp" style="margin: 0;">
+                      <span class="latency-dot"></span>
+                      <span id="netTabBadgeText" data-i18n="badge_upnp_text">UPnP Direct • 5-15 ms</span>
+                    </span>
+                  </div>
+                  <span class="setting-subtext" id="netTabAddressStatusText" data-i18n="net_addr_subtext">L'adresse suivante permet à vos amis de se connecter directement depuis le menu Multijoueur de Minecraft.</span>
+                  <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                    <code id="netTabPublicAddressDisplay" style="font-size: 14px; font-weight: 700; background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 8px 14px; border-radius: 6px; color: var(--accent); user-select: all; letter-spacing: 0.2px;" data-i18n="net_status_stopped">Arrêté</code>
+                    <button id="btnCopyAddressFromTab" class="action-btn btn-action-secondary" type="button">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                      <span id="lblCopyAddressTab" data-i18n="btn_copy_net_addr">Copier</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_local_port">Port local Minecraft</span>
+                  <span class="setting-subtext" data-i18n="net_local_port_desc">Port TCP écouté sur votre ordinateur local.</span>
+                </div>
+                <span id="netTabLocalPortDisplay" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">25565</span>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_route_state">État du service réseau</span>
+                  <span class="setting-subtext" id="netTabRoutingSubtext" data-i18n="net_route_state_desc">Prêt à router les connexions dès le démarrage du serveur.</span>
+                </div>
+                <span id="netTabRoutingStatusDisplay" style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);" data-i18n="net_state_ready">Prêt</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Carte Diagnostic de compatibilité réseau -->
+          <div class="settings-group">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <h2 class="group-title" style="margin: 0;" data-i18n="net_diag_conn_title">Diagnostic de compatibilité de votre connexion</h2>
+              <button id="btnRunTabDiag" class="btn btn-compact" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span data-i18n="btn_test_comp">Tester la compatibilité</span>
+              </button>
+            </div>
+            
+            <div id="netTabDiagBanner" class="diag-status-banner banner-warning" style="margin-bottom: 12px;">
+              <div class="diag-status-icon" id="netTabDiagIcon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+              </div>
+              <div class="diag-status-text">
+                <strong id="netTabDiagTitle" data-i18n="net_diag_ready_title">Diagnostic prêt à être lancé</strong>
+                <span id="netTabDiagDesc" data-i18n="net_diag_ready_desc">Testez la passerelle UPnP de votre box Internet et l'attribution d'adresse IP publique dédiée (5-15 ms de ping sans aucun serveur relais).</span>
+              </div>
+            </div>
+
+            <div id="netTabDiagTesting" class="diag-testing-box" style="display: none; margin-bottom: 12px;">
+              <div class="spinner-small"></div>
+              <span id="netTabDiagTestingText" data-i18n="net_diag_testing_text">Interrogation de votre box Internet et vérification des protocoles...</span>
+            </div>
+          </div>
+
+          <!-- 3. Modes de connexion & Choix actif -->
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="net_modes_heading">Mode de connexion multijoueur</h2>
+            <p class="setting-subtext" style="margin-bottom: 12px;" data-i18n="net_modes_subtext">Sélectionnez la méthode de routage souhaitée pour ce serveur.</p>
+
+            <div class="net-modes-grid">
+              <!-- Mode 1 : UPnP Direct -->
+              <div class="net-mode-card" id="cardModeUPnP" data-mode="upnp">
+                <div class="net-mode-header">
+                  <div class="net-mode-radio-wrap">
+                    <input type="radio" name="netModeChoice" id="radioModeUPnP" value="upnp">
+                    <label for="radioModeUPnP" class="net-mode-title" data-i18n="net_mode_upnp_label">UPnP Direct (Box Fibre / Câble)</label>
+                  </div>
+                  <span class="tunnel-latency-badge badge-upnp" style="margin: 0;">5-15 ms</span>
+                </div>
+                <p class="net-mode-desc">
+                  Ouverture temporaire de port sur votre box lors du démarrage. 0 ms de perte de routage, connexion directe ultra-rapide.
+                </p>
+                <div class="net-mode-badge-free" data-i18n="net_mode_upnp_badge">Recommandé si box compatible</div>
+              </div>
+
+              <!-- Mode 2 : Pinggy Automatique -->
+              <div class="net-mode-card" id="cardModePinggy" data-mode="pinggy">
+                <div class="net-mode-header">
+                  <div class="net-mode-radio-wrap">
+                    <input type="radio" name="netModeChoice" id="radioModePinggy" value="pinggy">
+                    <label for="radioModePinggy" class="net-mode-title" data-i18n="net_mode_pinggy_label">Relais Pinggy Automatique</label>
+                  </div>
+                  <span class="tunnel-latency-badge badge-pinggy" style="margin: 0;">~20 ms</span>
+                </div>
+                <p class="net-mode-desc">
+                  Relais automatique européen sécurisé. 0 configuration et 0 compte requis. Idéal si votre box ou opérateur bloque l'UPnP.
+                </p>
+                <div class="net-mode-badge-free" data-i18n="net_mode_pinggy_badge">0 configuration • 1 clic</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Paramètres détaillés du mode sélectionné -->
+          <div class="settings-group" id="netSectionUPnPConfig">
+            <h2 class="group-title" data-i18n="net_upnp_config_title">Configuration UPnP Direct & Accès multijoueur</h2>
+            <div class="setting-card">
+              <!-- Paramètre 1 : Utiliser un nom de domaine DuckDNS -->
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_duck_toggle">Utiliser une adresse / domaine DuckDNS (Gratuit & Permanent)</span>
+                  <span class="setting-subtext" data-i18n="net_duck_desc">Attribue une adresse fixe permanente (ex: mon-serveur.duckdns.org) synchronisée automatiquement même si votre box change d'IP.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="netToggleUseDuckDns">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <!-- Si DuckDNS activé (OUI) : affichage des paramètres DuckDNS -->
+              <div id="netDuckFieldsContainer" style="display: none;">
+                <div class="setting-divider"></div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="setting-label" data-i18n="net_subdomain_label">Sous-domaine DuckDNS</span>
+                    <span class="setting-subtext" data-i18n="net_subdomain_subtext">Le préfixe de votre adresse (ex: mon-serveur.duckdns.org).</span>
+                  </div>
+                  <div class="input-addon-group" style="max-width: 320px;">
+                    <input type="text" id="netInputDuckSubdomain" class="input-text" data-i18n-placeholder="placeholder_duck_subdomain" placeholder="mon-serveur">
+                    <span class="input-addon">.duckdns.org</span>
+                  </div>
+                </div>
+                <div class="setting-divider"></div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="setting-label" data-i18n="net_token_label">Token du compte DuckDNS</span>
+                    <span class="setting-subtext" data-i18n="net_token_subtext">Jeton de sécurité privé pour actualiser automatiquement votre domaine.</span>
+                  </div>
+                  <input type="password" id="netInputDuckToken" class="input-text input-wide" data-i18n-placeholder="placeholder_duck_token" placeholder="Collez votre jeton DuckDNS">
+                </div>
+                <div class="setting-divider"></div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="setting-label" data-i18n="net_link_label">Liaison & Vérification</span>
+                    <span class="setting-subtext" data-i18n="net_link_subtext">Vérifiez la validité de vos identifiants ou créez un compte gratuit.</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="btnNetOpenDuckDns" class="btn-link-action" style="margin-right: 8px;" data-i18n="btn_open_duckdns">Obtenir un token sur duckdns.org</button>
+                    <button type="button" id="btnNetTestDuckDns" class="action-btn btn-action-secondary" data-i18n="net_test_duck_btn">Tester DuckDNS</button>
+                  </div>
+                </div>
+                <div id="netDuckFeedback" class="duck-feedback" style="display: none; margin: 12px 20px;"></div>
+              </div>
+
+              <!-- Si DuckDNS désactivé (NON) : uniquement l'IP publique directe avec le port -->
+              <div id="netDirectIpContainer" style="display: block;">
+                <div class="setting-divider"></div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="setting-label" data-i18n="net_direct_ip_label">Adresse de connexion directe :</span>
+                    <span class="setting-subtext" data-i18n="net_direct_ip_info">Vos joueurs se connecteront directement à votre serveur via votre adresse IP publique et votre port ouvert.</span>
+                  </div>
+                  <code id="netDirectIpDisplay" style="font-family: monospace; font-weight: 600; font-size: 13px; color: var(--accent); background-color: var(--badge-bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color);">--:25565</code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group" id="netSectionPinggyConfig" style="display: none;">
+            <h2 class="group-title" data-i18n="net_pinggy_config_title">Configuration Pinggy Automatique</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_pinggy_relay_label">Relais européen automatique</span>
+                  <span class="setting-subtext" data-i18n="net_pinggy_relay_subtext">Aucune démarche requise : le tunnel TCP vers le relais européen de Pinggy s'active automatiquement dès le démarrage du serveur Minecraft (~20 ms).</span>
+                </div>
+                <span class="tunnel-latency-badge badge-pinggy" data-i18n="net_pinggy_badge_auto">Automatique en 1 clic</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bouton d'enregistrement global pour le réseau -->
+          <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+            <span id="netSaveFeedback" style="font-size: 13px; color: var(--accent); font-weight: 500; display: none;" data-i18n="net_feedback_saved">Modifications réseau enregistrées !</span>
+            <button type="button" id="btnSaveNetworkConfigTab" class="btn">
+              <span data-i18n="btn_save_network">Enregistrer la configuration réseau</span>
+            </button>
+          </div>
+
+          <!-- 5. Guide technique sobre et informatif -->
+          <div class="settings-group" style="margin-top: 24px;">
+            <h2 class="group-title" data-i18n="net_faq_heading">Comprendre le routage et les performances</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_faq_q1">Pourquoi l'UPnP Direct offre-t-il la meilleure performance ?</span>
+                  <span class="setting-subtext" data-i18n="net_faq_a1">L'UPnP demande à votre box Internet de router directement les paquets entrants du port Minecraft (25565) vers votre PC. Sans passerelle ni serveur intermédiaire, vous bénéficiez du ping direct de votre fibre (5 à 15 ms).</span>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_faq_q2">Qu'est-ce que le CGNAT et pourquoi mon diagnostic est incompatible ?</span>
+                  <span class="setting-subtext" data-i18n="net_faq_a2">Certains opérateurs partagent une même adresse IPv4 publique entre plusieurs clients (Carrier-Grade NAT). Les ports entrants sont alors bloqués en amont par l'opérateur. Cette limitation dépend exclusivement de votre équipement ou opérateur, et non de DesktopServer. Dans ce cas, le relais Pinggy contourne le problème immédiatement sans nécessiter d'ouverture de port.</span>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="net_faq_q3">Comment activer l'UPnP sur sa box Internet ?</span>
+                  <span class="setting-subtext" data-i18n="net_faq_a3">Sur l'interface de votre box (192.168.1.1 ou mafreebox.freebox.fr), ouvrez la section Réseau / Paramètres avancés et cochez "Activer UPnP IGD", puis relancez le diagnostic dans DesktopServer.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vue 6 : Performances & Ressources du Serveur -->
+      <section id="server-view-performance" class="tab-view">
+        <header class="content-header">
+          <div class="header-left">
+            <h1 class="page-title" data-i18n="perf_title">Performances & Ressources</h1>
+            <p class="page-subtitle" id="perfServerMeta" data-i18n="perf_subtitle">Surveillance en direct de la mémoire, du processeur et du stockage de cette instance.</p>
+          </div>
+          <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <div id="perfServerStatusBadge" class="perf-status-badge">
+              <span class="perf-status-dot"></span>
+              <span id="perfServerStatusText" data-i18n="perf_status_stopped">Serveur arrêté</span>
+            </div>
+            <div id="perfUptimeBox" class="perf-uptime-box" style="display: none;">
+              <span class="perf-uptime-label" data-i18n="perf_uptime">Temps d'activité</span>
+              <span id="perfUptimeVal" class="perf-uptime-val">00:00:00</span>
+            </div>
+          </div>
+        </header>
+
+        <div class="settings-content">
+          <!-- Bannière indicative quand le serveur est arrêté -->
+          <div id="perfStoppedNotice" class="perf-stopped-notice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: var(--accent);">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span data-i18n="perf_stopped_notice">Le serveur est actuellement arrêté. Démarrez-le pour observer la consommation réelle de RAM et de CPU en direct.</span>
+          </div>
+
+          <!-- Section 1 : Mémoire Vive (RAM) -->
+          <div class="settings-group">
+            <div class="group-title-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h2 class="group-title" style="margin: 0;" data-i18n="perf_ram_card_title">Mémoire Vive (RAM)</h2>
+              <span class="perf-live-pill" data-i18n="perf_live_label">En direct</span>
+            </div>
+            <div class="setting-card perf-card">
+              <div class="perf-stats-grid">
+                <div class="perf-stat-item">
+                  <span class="perf-stat-label" data-i18n="perf_ram_server_used">RAM utilisée par le serveur</span>
+                  <span id="perfRamServerVal" class="perf-stat-val">0 MB</span>
+                  <span id="perfRamServerSub" class="perf-stat-sub">-</span>
+                </div>
+                <div class="perf-stat-item">
+                  <span class="perf-stat-label" data-i18n="perf_ram_jvm_max">Allocation max JVM (-Xmx)</span>
+                  <span id="perfRamMaxVal" class="perf-stat-val">2 GB</span>
+                  <span class="perf-stat-sub">Limite configurée</span>
+                </div>
+                <div class="perf-stat-item">
+                  <span class="perf-stat-label" data-i18n="perf_ram_system_used">Mémoire système globale</span>
+                  <span id="perfRamSystemVal" class="perf-stat-val">-</span>
+                  <span id="perfRamSystemSub" class="perf-stat-sub">-</span>
+                </div>
+              </div>
+              <div class="perf-chart-wrapper">
+                <canvas id="perfRamChart" class="perf-canvas" height="120"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2 : Processeur -->
+          <div class="settings-group" style="margin-top: 24px;">
+            <div class="group-title-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h2 class="group-title" style="margin: 0;" data-i18n="perf_cpu_card_title">Processeur (CPU)</h2>
+              <span id="perfCpuModelHeader" class="perf-cpu-model-badge">-</span>
+            </div>
+            <div class="setting-card perf-card">
+              <div class="perf-stats-grid">
+                <div class="perf-stat-item">
+                  <span class="perf-stat-label" data-i18n="perf_cpu_server_used">Charge CPU du serveur</span>
+                  <span id="perfCpuServerVal" class="perf-stat-val">0%</span>
+                  <span class="perf-stat-sub">Processus Minecraft</span>
+                </div>
+                <div class="perf-stat-item">
+                  <span class="perf-stat-label" data-i18n="perf_cpu_system_used">Charge CPU globale</span>
+                  <span id="perfCpuSystemVal" class="perf-stat-val">0%</span>
+                  <span class="perf-stat-sub">Ensemble de l'ordinateur</span>
+                </div>
+              </div>
+
+              <div class="perf-chart-wrapper">
+                <canvas id="perfCpuChart" class="perf-canvas" height="120"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3 : Stockage utilisé par le serveur -->
+          <div class="settings-group" style="margin-top: 24px;">
+            <div class="group-title-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h2 class="group-title" style="margin: 0;" data-i18n="perf_storage_card_title">Stockage utilisé par le serveur</h2>
+              <button type="button" id="btnRefreshStorage" class="action-btn btn-action-secondary" style="height: 32px; padding: 0 12px; font-size: 12.5px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span data-i18n="perf_storage_btn_refresh">Recalculer la taille</span>
+              </button>
+            </div>
+            <div class="setting-card perf-card">
+              <div class="perf-storage-header">
+                <div class="perf-storage-total-box">
+                  <span class="perf-storage-total-label" data-i18n="perf_storage_total_label">Espace total occupé sur le disque</span>
+                  <div class="perf-storage-total-display">
+                    <span id="perfStorageTotalVal" class="perf-storage-big-val">Calcul en cours...</span>
+                    <span id="perfStorageCalculatedAt" class="perf-storage-time">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="perf-storage-breakdown">
+                <!-- Monde -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-world"></span>
+                      <span data-i18n="perf_cat_world">Monde & Dimensions</span>
+                    </span>
+                    <span id="perfStorageWorldVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStorageWorldBar" class="perf-storage-bar-fill fill-world" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- Plugins -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-plugins"></span>
+                      <span data-i18n="perf_cat_plugins">Plugins</span>
+                    </span>
+                    <span id="perfStoragePluginsVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStoragePluginsBar" class="perf-storage-bar-fill fill-plugins" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- Mods -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-mods"></span>
+                      <span data-i18n="perf_cat_mods">Mods</span>
+                    </span>
+                    <span id="perfStorageModsVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStorageModsBar" class="perf-storage-bar-fill fill-mods" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- Exécutables JAR -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-jars"></span>
+                      <span data-i18n="perf_cat_jars">Fichiers exécutables Java (.jar)</span>
+                    </span>
+                    <span id="perfStorageJarsVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStorageJarsBar" class="perf-storage-bar-fill fill-jars" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- Logs & Crash reports -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-logs"></span>
+                      <span data-i18n="perf_cat_logs">Journaux & Rapports de crash</span>
+                    </span>
+                    <span id="perfStorageLogsVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStorageLogsBar" class="perf-storage-bar-fill fill-logs" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- Configurations & Autres -->
+                <div class="perf-storage-row">
+                  <div class="perf-storage-row-header">
+                    <span class="perf-storage-category">
+                      <span class="perf-dot dot-other"></span>
+                      <span data-i18n="perf_cat_other">Configurations, caches & divers</span>
+                    </span>
+                    <span id="perfStorageOtherVal" class="perf-storage-size">-</span>
+                  </div>
+                  <div class="perf-storage-bar-track">
+                    <div id="perfStorageOtherBar" class="perf-storage-bar-fill fill-other" style="width: 0%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  <!-- Modals pour le gestionnaire de fichiers FTP -->
+  <div id="modalNewFolder" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card">
+      <h3 class="ds-modal-title" data-i18n="modal_new_folder_title">Nouveau dossier</h3>
+      <div class="ds-modal-body">
+        <label class="ds-modal-label" for="inputNewFolderName" data-i18n="label_folder_name">Nom du dossier</label>
+        <input type="text" id="inputNewFolderName" class="input-text" data-i18n-placeholder="placeholder_new_folder" placeholder="ex: plugins, mods, backups..." autocomplete="off">
+      </div>
+      <div class="ds-modal-actions">
+        <button type="button" id="btnCancelNewFolder" class="btn-subtle" data-i18n="btn_cancel">Annuler</button>
+        <button type="button" id="btnConfirmNewFolder" class="btn" data-i18n="btn_create">Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalNewFile" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card">
+      <h3 class="ds-modal-title" data-i18n="modal_new_file_title">Nouveau fichier</h3>
+      <div class="ds-modal-body">
+        <label class="ds-modal-label" for="inputNewFileName" data-i18n="label_file_name">Nom du fichier</label>
+        <input type="text" id="inputNewFileName" class="input-text" data-i18n-placeholder="placeholder_new_file" placeholder="ex: whitelist.json, ops.json, motd.txt..." autocomplete="off">
+      </div>
+      <div class="ds-modal-actions">
+        <button type="button" id="btnCancelNewFile" class="btn-subtle" data-i18n="btn_cancel">Annuler</button>
+        <button type="button" id="btnConfirmNewFile" class="btn" data-i18n="btn_create">Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalRename" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card">
+      <h3 class="ds-modal-title" data-i18n="modal_rename_title">Renommer l'élément</h3>
+      <div class="ds-modal-body">
+        <label class="ds-modal-label" for="inputRenameName" data-i18n="label_rename_name">Nouveau nom</label>
+        <input type="text" id="inputRenameName" class="input-text" autocomplete="off">
+      </div>
+      <div class="ds-modal-actions">
+        <button type="button" id="btnCancelRename" class="btn-subtle" data-i18n="btn_cancel">Annuler</button>
+        <button type="button" id="btnConfirmRename" class="btn" data-i18n="btn_rename">Renommer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalConfirmDelete" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card">
+      <h3 class="ds-modal-title" data-i18n="modal_delete_title">Supprimer l'élément</h3>
+      <div class="ds-modal-body">
+        <p id="deleteConfirmMessage" style="font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.5;"></p>
+      </div>
+      <div class="ds-modal-actions">
+        <button type="button" id="btnCancelDelete" class="btn-subtle" data-i18n="btn_cancel">Annuler</button>
+        <button type="button" id="btnConfirmDelete" class="btn" style="background-color: #ef4444;" data-i18n="btn_delete">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Diagnostic & Configuration Réseau Multijoueur -->
+  <div id="networkDiagnosticModal" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card network-modal-card">
+      <div class="modal-top-header">
+        <div class="modal-title-wrap">
+          <h3 class="ds-modal-title" data-i18n="diag_modal_title">Connexion Multijoueur & Accès Public</h3>
+          <p class="modal-subtitle" data-i18n="diag_modal_subtitle">Diagnostic de votre connexion pour offrir la meilleure latence à vos joueurs.</p>
+        </div>
+        <button type="button" id="btnCloseNetworkModal" class="modal-close-btn" title="Fermer" data-i18n-title="titlebar_close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Étape 1 : Diagnostic Initial -->
+      <div id="diagStepInitial" class="diag-step">
+        <div class="diag-info-box">
+          <div class="diag-info-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+              <line x1="6" y1="6" x2="6.01" y2="6"></line>
+              <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+          </div>
+          <div class="diag-info-content">
+            <h4 class="diag-box-title" data-i18n="diag_box_title">Test de compatibilité UPnP Direct (5-15 ms)</h4>
+            <p class="diag-box-desc" data-i18n="diag_box_desc">
+              DesktopServer teste si votre box Internet supporte l'ouverture automatique de ports (UPnP) et dispose d'une adresse IPv4 publique dédiée.
+            </p>
+            <ul class="diag-feature-list">
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span data-i18n="diag_feat_1">0 ms de perte de routage : ping direct de votre fibre/câble (5 à 15 ms).</span>
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span data-i18n="diag_feat_2">Bande passante illimitée : connexion directe sans aucun serveur intermédiaire.</span>
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span data-i18n="diag_feat_3">Adresse fixe permanente DuckDNS : s'adapte automatiquement si votre box redémarre.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div id="diagTestingStatus" class="diag-testing-box" style="display: none;">
+          <div class="spinner-small"></div>
+          <span id="diagTestingStatusText" data-i18n="diag_testing_status">Interrogation de votre passerelle réseau et vérification des protocoles...</span>
+        </div>
+
+        <div class="ds-modal-actions">
+          <button type="button" id="btnSkipNetworkDiag" class="btn-subtle" data-i18n="btn_skip_diag">Passer pour le moment</button>
+          <button type="button" id="btnRunNetworkDiag" class="btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span data-i18n="btn_run_diag">Lancer le diagnostic</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Étape 2A : Connexion Compatible (UPnP Direct + DuckDNS) -->
+      <div id="diagStepCompatible" class="diag-step" style="display: none;">
+        <div class="diag-status-banner banner-success">
+          <div class="diag-status-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div class="diag-status-text">
+            <strong data-i18n="diag_comp_title">Connexion compatible UPnP Direct</strong>
+            <span id="diagCompatibleDetail" data-i18n="diag_comp_desc">Votre équipement autorise l'ouverture de port directe avec une IP publique dédiée.</span>
+          </div>
+        </div>
+
+        <div class="diag-duckdns-section">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div>
+              <span class="setting-label" style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);" data-i18n="net_duck_toggle">Utiliser un nom de domaine DuckDNS</span>
+              <div class="setting-subtext" data-i18n="diag_duck_desc" style="font-size: 11.5px;">Attribue une adresse fixe permanente (ex: mon-serveur.duckdns.org).</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="modalToggleUseDuckDns" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Si OUI : paramètres DuckDNS -->
+          <div id="modalDuckFieldsContainer">
+            <div class="form-grid-two">
+              <div class="form-group">
+                <label class="form-label" for="inputDuckSubdomain" data-i18n="net_subdomain_label">Sous-domaine DuckDNS</label>
+                <div class="input-addon-group">
+                  <input type="text" id="inputDuckSubdomain" class="input-text" data-i18n-placeholder="placeholder_duck_subdomain" placeholder="mon-serveur" autocomplete="off">
+                  <span class="input-addon">.duckdns.org</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="inputDuckToken" data-i18n="net_token_label">Jeton de sécurité (Token)</label>
+                <input type="password" id="inputDuckToken" class="input-text" data-i18n-placeholder="placeholder_duck_token" placeholder="Collez votre jeton de compte" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="duck-actions-bar">
+              <button type="button" id="btnOpenDuckDnsSite" class="btn-link-action">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span data-i18n="btn_open_duckdns">Obtenir mon token sur duckdns.org</span>
+              </button>
+              <button type="button" id="btnTestDuckDnsConn" class="action-btn btn-action-secondary">
+                <span data-i18n="btn_test_link">Tester la liaison</span>
+              </button>
+            </div>
+            <div id="duckDnsFeedback" class="duck-feedback" style="display: none;"></div>
+          </div>
+
+          <!-- Si NON : juste l'adresse IP publique avec le port -->
+          <div id="modalDirectIpContainer" style="display: none; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color); margin-top: 8px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;" data-i18n="net_direct_ip_label">Adresse directe par IP publique :</div>
+            <code id="modalDirectIpDisplay" style="font-family: monospace; font-size: 13px; font-weight: 600; color: var(--accent);">--:25565</code>
+          </div>
+        </div>
+
+        <div class="ds-modal-actions">
+          <button type="button" id="btnBackToInitialDiag" class="btn-subtle" data-i18n="btn_retest">Re-tester</button>
+          <button type="button" id="btnConfirmUPnP" class="btn">
+            <span data-i18n="btn_activate_upnp">Activer UPnP Direct</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Étape 2B : Incompatible (Portmap.io fallback) -->
+      <div id="diagStepIncompatible" class="diag-step" style="display: none;">
+        <div class="diag-status-banner banner-warning">
+          <div class="diag-status-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="diag-status-text">
+            <strong data-i18n="diag_incomp_title">Connexion directe bloquée par votre opérateur ou équipement</strong>
+            <span id="diagIncompatibleDetail" data-i18n="diag_incomp_desc">UPnP non supporté ou réseau sous Carrier-Grade NAT (CGNAT).</span>
+          </div>
+        </div>
+
+        <div class="diag-incompatible-explanation">
+          <p class="diag-explanation-p" data-i18n="diag_incomp_exp_1">Votre box Internet ou votre opérateur bloque l'ouverture automatique de ports (UPnP désactivé ou réseau CGNAT partagé). Cette limitation dépend exclusivement de votre équipement réseau et de votre fournisseur d'accès, et non de DesktopServer.</p>
+          <div class="portmap-notice-card">
+            <div class="portmap-notice-header">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span data-i18n="diag_pinggy_header">Relais automatique Pinggy (0 configuration, ~20 ms de ping)</span>
+            </div>
+            <p class="portmap-notice-desc" data-i18n="diag_pinggy_desc">DesktopServer a sélectionné pour vous le relais européen Pinggy. Aucun compte à créer, aucune clé SSH à renseigner, aucun champ à remplir : la connexion s'active automatiquement en tâche de fond en un seul clic !</p>
+            <p class="portmap-notice-desc" data-i18n="diag_pinggy_note" style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px;">Note : En mode anonyme gratuit, une nouvelle adresse de connexion est générée à chaque redémarrage du serveur.</p>
+          </div>
+        </div>
+
+        <div class="ds-modal-actions">
+          <button type="button" id="btnBackToInitialDiag2" class="btn-subtle" data-i18n="btn_retest">Re-tester</button>
+          <button type="button" id="btnConfirmPinggy" class="btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
+            </svg>
+            <span data-i18n="btn_activate_pinggy">Activer Pinggy (Automatique)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Dependances
+node_modules/
+
+# Sorties de compilation
+dist/
+
+# Runtimes Java locaux
+java_runtimes/
+
+# Journaux et logs
+*.log
+npm-debug.log*
+
+# Fichiers temporaires systeme
+.DS_Store
+Thumbs.db

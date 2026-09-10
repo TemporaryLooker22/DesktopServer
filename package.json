@@ -1,0 +1,101 @@
+{
+  "name": "desktop-server",
+  "version": "1.0.0",
+  "description": "Application DesktopServer épurée avec Electron",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:installer": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder -mw"
+  },
+  "keywords": [
+    "electron",
+    "server",
+    "desktop"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.desktopserver.app",
+    "productName": "DesktopServer",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      "bin/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DesktopServer",
+      "artifactName": "DesktopServer-Setup.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerLanguages": [
+        "fr_FR",
+        "en_US",
+        "es_ES",
+        "de_DE",
+        "pt_BR"
+      ],
+      "language": "1036",
+      "multiLanguageInstaller": true,
+      "displayLanguageSelector": true,
+      "warningsAsErrors": false,
+      "include": "build/installer.nsh"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "DesktopServer",
+      "artifactName": "DesktopServer.dmg",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "DesktopServer.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "pidusage": "^4.0.1"
+  }
+}
