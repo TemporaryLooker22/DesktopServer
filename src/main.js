@@ -376,10 +376,53 @@ function findExistingJavaRuntime(targetJavaVer) {
   return null;
 }
 
+// Shim dyld pour macOS 10.13 High Sierra (resout le symbole manquant ____chkstk_darwin pour Java 25)
+function getMacDyldShimPath() {
+  if (process.platform !== 'darwin') return null;
+  const candidates = [
+    path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
+    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
+  ];
+  try {
+    if (typeof app !== 'undefined' && app.getPath) {
+      candidates.push(path.join(app.getPath('userData'), 'bin', 'mac', 'libchkstk.dylib'));
+    }
+  } catch (e) {}
+
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) {
+      try {
+        if (typeof app !== 'undefined' && app.getPath) {
+          const userDylib = path.join(app.getPath('userData'), 'bin', 'mac', 'libchkstk.dylib');
+          if (c !== userDylib && !fs.existsSync(userDylib)) {
+            fs.mkdirSync(path.dirname(userDylib), { recursive: true });
+            fs.copyFileSync(c, userDylib);
+          }
+        }
+      } catch (err) {}
+      return c;
+    }
+  }
+  return null;
+}
+
+function getMacDyldEnv() {
+  const shim = getMacDyldShimPath();
+  if (shim) {
+    return {
+      DYLD_FORCE_FLAT_NAMESPACE: '1',
+      DYLD_INSERT_LIBRARIES: shim
+    };
+  }
+  return {};
+}
+
 // Détection de la version majeure du Java installé dans le PATH système
 function getSystemJavaMajorVersion() {
   try {
-    const res = child_process.spawnSync('java', ['-version'], { encoding: 'utf8' });
+    const env = { ...process.env, ...getMacDyldEnv() };
+    const res = child_process.spawnSync('java', ['-version'], { encoding: 'utf8', env });
     const output = (res.stderr || '') + (res.stdout || '');
     const match = output.match(/version "([0-9]+)(?:\.([0-9]+))?/i);
     if (match) {
@@ -414,31 +457,6 @@ function extractArchive(archivePath, destDir) {
   }
 }
 const extractZipArchive = extractArchive;
-
-// Shim dyld pour macOS 10.13 High Sierra (resout le symbole manquant ____chkstk_darwin pour Java 25)
-function getMacDyldShimPath() {
-  if (process.platform !== 'darwin') return null;
-  const candidates = [
-    path.join(process.resourcesPath || '', 'bin', 'mac', 'libchkstk.dylib'),
-    path.join(__dirname, '..', 'bin', 'mac', 'libchkstk.dylib'),
-    path.join(typeof app !== 'undefined' && app.getAppPath ? app.getAppPath() : '', 'bin', 'mac', 'libchkstk.dylib')
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
-}
-
-function getMacDyldEnv() {
-  const shim = getMacDyldShimPath();
-  if (shim) {
-    return {
-      DYLD_FORCE_FLAT_NAMESPACE: '1',
-      DYLD_INSERT_LIBRARIES: shim
-    };
-  }
-  return {};
-}
 
 // Teste la validite reelle d'un executable Java (verifie l'absence de crash dyld ou de symboles manquants)
 function testJavaExecutable(javaPath) {
