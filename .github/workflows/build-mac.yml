@@ -28,7 +28,11 @@ jobs:
 
       - name: Build macOS DMG (macOS 10.13+ High Sierra & modern macOS)
         run: |
-          npm run build:mac
+          npx electron-builder --mac --x64 -p never
+          hdiutil detach /Volumes/DesktopServer -force || true
+          sleep 3
+          npx electron-builder --mac --arm64 -p never
+          hdiutil detach /Volumes/DesktopServer -force || true
           cp dist/DesktopServer-x64.dmg dist/DesktopServer.dmg || true
           cp dist/DesktopServer-x64.dmg dist/DesktopServer-HighSierra.dmg || true
         env:

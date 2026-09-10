@@ -8,7 +8,7 @@
     "build": "electron-builder --win",
     "build:installer": "electron-builder --win nsis",
     "build:portable": "electron-builder --win portable",
-    "build:mac": "electron-builder --mac -p never",
+    "build:mac": "electron-builder --mac --x64 -p never && electron-builder --mac --arm64 -p never",
     "build:all": "electron-builder -mw -p never"
   },
   "keywords": [
@@ -64,20 +64,8 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        "dmg",
+        "zip"
       ],
       "minimumSystemVersion": "10.13.0",
       "extendInfo": {
