@@ -4024,6 +4024,276 @@ ipcMain.handle('save-server-properties', async (event, { serverId, properties })
   return true;
 });
 
+// ============================================================================
+// MOTEUR DE MISE A JOUR LOGICIELLE INTRA-APPLICATION (GITHUB RELEASES DIRECT)
+// ============================================================================
+
+let downloadedUpdateFile = null;
+
+function compareVersions(v1, v2) {
+  const cleanV1 = String(v1 || '').replace(/^v/i, '').trim();
+  const cleanV2 = String(v2 || '').replace(/^v/i, '').trim();
+  const p1 = cleanV1.split('.').map(n => parseInt(n, 10) || 0);
+  const p2 = cleanV2.split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(p1.length, p2.length);
+  for (let i = 0; i < len; i++) {
+    const num1 = p1[i] || 0;
+    const num2 = p2[i] || 0;
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+function selectBestUpdateAsset(assets) {
+  if (!Array.isArray(assets) || assets.length === 0) return null;
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const isArm64 = process.arch === 'arm64';
+
+  if (isWin) {
+    const setupExe = assets.find(a => a.name && a.name.toLowerCase().endsWith('-setup.exe'));
+    if (setupExe) return setupExe;
+    const anyExe = assets.find(a => a.name && a.name.toLowerCase().endsWith('.exe'));
+    if (anyExe) return anyExe;
+  }
+
+  if (isMac) {
+    if (isArm64) {
+      const armDmg = assets.find(a => a.name && a.name.toLowerCase().includes('arm64') && a.name.toLowerCase().endsWith('.dmg'));
+      if (armDmg) return armDmg;
+      const armZip = assets.find(a => a.name && a.name.toLowerCase().includes('arm64') && a.name.toLowerCase().endsWith('.zip'));
+      if (armZip) return armZip;
+    }
+    const hsDmg = assets.find(a => a.name && a.name.toLowerCase().includes('highsierra') && a.name.toLowerCase().endsWith('.dmg'));
+    if (hsDmg) return hsDmg;
+    const x64Dmg = assets.find(a => a.name && a.name.toLowerCase().endsWith('.dmg') && !a.name.toLowerCase().includes('arm64'));
+    if (x64Dmg) return x64Dmg;
+    const macZip = assets.find(a => a.name && a.name.toLowerCase().endsWith('-mac.zip') && !a.name.toLowerCase().includes('arm64'));
+    if (macZip) return macZip;
+    const anyDmg = assets.find(a => a.name && a.name.toLowerCase().endsWith('.dmg'));
+    if (anyDmg) return anyDmg;
+  }
+
+  return null;
+}
+
+async function fetchLatestGitHubRelease() {
+  const url = 'https://api.github.com/repos/TemporaryLooker22/DesktopServer/releases/latest';
+  return new Promise((resolve, reject) => {
+    const options = {
+      headers: {
+        'User-Agent': 'DesktopServer-App',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    };
+    const req = https.get(url, options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        https.get(res.headers.location, options, (r2) => {
+          let body = '';
+          r2.on('data', c => body += c);
+          r2.on('end', () => {
+            try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+          });
+        }).on('error', reject);
+        return;
+      }
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            resolve(JSON.parse(body));
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => {
+      req.destroy();
+      reject(new Error('Timeout de connexion a GitHub'));
+    });
+  });
+}
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const currentVersion = app.getVersion();
+    const release = await fetchLatestGitHubRelease();
+    if (!release || !release.tag_name) {
+      return { hasUpdate: false, currentVersion, error: 'Aucune version publiee trouvee.' };
+    }
+
+    const latestVersion = release.tag_name.replace(/^v/i, '').trim();
+    const isNewer = compareVersions(latestVersion, currentVersion) > 0;
+    const asset = selectBestUpdateAsset(release.assets);
+
+    return {
+      hasUpdate: isNewer,
+      currentVersion,
+      latestVersion,
+      releaseTitle: release.name || `Version ${latestVersion}`,
+      releaseNotes: release.body || '',
+      releaseDate: release.published_at || '',
+      htmlUrl: release.html_url || '',
+      assetName: asset ? asset.name : null,
+      assetSize: asset ? asset.size : 0,
+      downloadUrl: asset ? asset.browser_download_url : null
+    };
+  } catch (err) {
+    return {
+      hasUpdate: false,
+      currentVersion: app.getVersion(),
+      error: err.message
+    };
+  }
+});
+
+function downloadUpdateFileStream(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const handleResponse = (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        https.get(res.headers.location, { headers: { 'User-Agent': 'DesktopServer-App' } }, handleResponse).on('error', reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Echec du telechargement (HTTP ${res.statusCode})`));
+      }
+
+      const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+      let downloadedBytes = 0;
+      const file = fs.createWriteStream(destPath);
+
+      res.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        file.write(chunk);
+        if (onProgress && totalBytes > 0) {
+          const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
+          onProgress(percent, downloadedBytes, totalBytes);
+        }
+      });
+
+      res.on('end', () => {
+        file.end(() => resolve(destPath));
+      });
+
+      res.on('error', (err) => {
+        file.destroy();
+        try { fs.unlinkSync(destPath); } catch (e) {}
+        reject(err);
+      });
+    };
+
+    https.get(url, { headers: { 'User-Agent': 'DesktopServer-App' } }, handleResponse).on('error', reject);
+  });
+}
+
+ipcMain.handle('start-download-update', async (event, downloadUrl) => {
+  if (!downloadUrl) throw new Error('URL de telechargement manquante.');
+  const tempDir = app.getPath('temp');
+  let filename = 'DesktopServer-update.bin';
+  try {
+    filename = path.basename(new URL(downloadUrl).pathname) || filename;
+  } catch (e) {}
+  const targetPath = path.join(tempDir, filename);
+
+  try {
+    await downloadUpdateFileStream(downloadUrl, targetPath, (percent, bytesTransferred, totalBytes) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-download-progress', {
+          percent,
+          bytesTransferred,
+          totalBytes
+        });
+      }
+    });
+
+    downloadedUpdateFile = targetPath;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-downloaded', { filePath: targetPath });
+    }
+    return { success: true, filePath: targetPath };
+  } catch (err) {
+    throw new Error('Erreur lors du telechargement : ' + err.message);
+  }
+});
+
+ipcMain.handle('apply-update-and-restart', async () => {
+  if (!downloadedUpdateFile || !fs.existsSync(downloadedUpdateFile)) {
+    throw new Error('Le fichier de mise a jour est introuvable.');
+  }
+
+  const updatePath = downloadedUpdateFile;
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
+  if (isWin) {
+    child_process.spawn(updatePath, ['/S'], {
+      detached: true,
+      stdio: 'ignore'
+    }).unref();
+    app.quit();
+    return true;
+  }
+
+  if (isMac) {
+    if (updatePath.endsWith('.dmg')) {
+      const script = [
+        'sleep 1',
+        'MOUNT_DIR=$(mktemp -d /tmp/ds_mount.XXXXXX)',
+        `hdiutil attach "${updatePath}" -nobrowse -mountpoint "$MOUNT_DIR" -quiet || exit 1`,
+        'if [ -d "$MOUNT_DIR/DesktopServer.app" ]; then',
+        '  rm -rf /Applications/DesktopServer.app',
+        '  cp -R "$MOUNT_DIR/DesktopServer.app" /Applications/',
+        '  xattr -cr /Applications/DesktopServer.app 2>/dev/null || true',
+        '  hdiutil detach "$MOUNT_DIR" -force -quiet || true',
+        '  rm -rf "$MOUNT_DIR"',
+        '  open /Applications/DesktopServer.app',
+        'else',
+        '  hdiutil detach "$MOUNT_DIR" -force -quiet || true',
+        '  rm -rf "$MOUNT_DIR"',
+        `  open "${updatePath}"`,
+        'fi'
+      ].join('\n');
+
+      child_process.spawn('/bin/sh', ['-c', script], {
+        detached: true,
+        stdio: 'ignore'
+      }).unref();
+      app.quit();
+      return true;
+    } else if (updatePath.endsWith('.zip')) {
+      const script = [
+        'sleep 1',
+        `unzip -q -o "${updatePath}" -d /Applications/`,
+        'xattr -cr /Applications/DesktopServer.app 2>/dev/null || true',
+        'open /Applications/DesktopServer.app'
+      ].join('\n');
+
+      child_process.spawn('/bin/sh', ['-c', script], {
+        detached: true,
+        stdio: 'ignore'
+      }).unref();
+      app.quit();
+      return true;
+    } else {
+      shell.openPath(updatePath);
+      app.quit();
+      return true;
+    }
+  }
+
+  return false;
+});
+
 function restoreRunningTunnelsOnStartup() {
   const primaryDir = getPrimaryServersDir();
   if (!fs.existsSync(primaryDir)) return;

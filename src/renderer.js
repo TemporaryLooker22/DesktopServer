@@ -3347,4 +3347,237 @@ window.addEventListener('DOMContentLoaded', async () => {
   try {
     loadEngineVersions('Paper');
   } catch (e) {}
+
+  // ============================================================================
+  // GESTION DU SYSTEME DE MISE A JOUR INTRA-APPLICATION (GITHUB RELEASES DIRECT)
+  // ============================================================================
+
+  const appCurrentVersionText = document.getElementById('appCurrentVersionText');
+  const updateStatusIndicator = document.getElementById('updateStatusIndicator');
+  const btnCheckForUpdates = document.getElementById('btnCheckForUpdates');
+  const toggleAutoCheckUpdates = document.getElementById('toggleAutoCheckUpdates');
+  const sidebarUpdateBadge = document.getElementById('sidebarUpdateBadge');
+
+  const modalUpdate = document.getElementById('modalUpdate');
+  const updateModalBadge = document.getElementById('updateModalBadge');
+  const updateModalDate = document.getElementById('updateModalDate');
+  const updateChangelogContent = document.getElementById('updateChangelogContent');
+  const updateProgressSection = document.getElementById('updateProgressSection');
+  const updateProgressStatus = document.getElementById('updateProgressStatus');
+  const updateProgressPercent = document.getElementById('updateProgressPercent');
+  const updateProgressFill = document.getElementById('updateProgressFill');
+  const btnUpdateModalAction = document.getElementById('btnUpdateModalAction');
+  const btnUpdateActionText = document.getElementById('btnUpdateActionText');
+  const btnUpdateModalClose = document.getElementById('btnUpdateModalClose');
+  const btnUpdateModalLater = document.getElementById('btnUpdateModalLater');
+
+  let currentUpdateData = null;
+  let updateActionState = 'download'; // 'download' | 'install'
+
+  function formatBytesSize(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function renderChangelogHtml(rawMarkdown) {
+    if (!rawMarkdown || !rawMarkdown.trim()) {
+      return `<p>${window.i18n ? window.i18n.t('modal_update_features') : 'Nouvelles fonctionnalités et améliorations'}</p>`;
+    }
+    const lines = rawMarkdown.split('\n');
+    let html = '';
+    let inList = false;
+
+    for (let line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (inList) { html += '</ul>'; inList = false; }
+        continue;
+      }
+      if (trimmed.startsWith('#')) {
+        if (inList) { html += '</ul>'; inList = false; }
+        const cleanHeader = trimmed.replace(/^#+\s*/, '');
+        html += `<div style="font-weight: 700; margin-top: 8px; margin-bottom: 4px; color: var(--text-primary);">${escapeHtml(cleanHeader)}</div>`;
+      } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        const item = trimmed.slice(2).trim();
+        html += `<li>${escapeHtml(item)}</li>`;
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<p style="margin: 4px 0;">${escapeHtml(trimmed)}</p>`;
+      }
+    }
+    if (inList) html += '</ul>';
+    return html;
+  }
+
+  function openUpdateModal(updateInfo) {
+    currentUpdateData = updateInfo;
+    updateActionState = 'download';
+
+    if (updateModalBadge) updateModalBadge.textContent = `v${updateInfo.latestVersion}`;
+    if (updateModalDate) {
+      let dateStr = '';
+      if (updateInfo.releaseDate) {
+        try {
+          const d = new Date(updateInfo.releaseDate);
+          dateStr = d.toLocaleDateString();
+        } catch (e) {}
+      }
+      const label = window.i18n ? window.i18n.t('modal_update_published_at') : 'Publiée le';
+      updateModalDate.textContent = dateStr ? `${label} ${dateStr}` : '';
+    }
+
+    if (updateChangelogContent) {
+      updateChangelogContent.innerHTML = renderChangelogHtml(updateInfo.releaseNotes);
+    }
+
+    if (updateProgressSection) updateProgressSection.style.display = 'none';
+    if (updateProgressFill) updateProgressFill.style.width = '0%';
+    if (btnUpdateActionText) {
+      btnUpdateActionText.textContent = window.i18n ? window.i18n.t('modal_update_btn_download') : 'Télécharger et installer';
+    }
+    if (btnUpdateModalAction) btnUpdateModalAction.disabled = false;
+
+    if (modalUpdate) modalUpdate.style.display = 'flex';
+  }
+
+  function closeUpdateModal() {
+    if (modalUpdate) modalUpdate.style.display = 'none';
+  }
+
+  if (btnUpdateModalClose) btnUpdateModalClose.addEventListener('click', closeUpdateModal);
+  if (btnUpdateModalLater) btnUpdateModalLater.addEventListener('click', closeUpdateModal);
+
+  if (btnUpdateModalAction) {
+    btnUpdateModalAction.addEventListener('click', async () => {
+      if (updateActionState === 'install') {
+        try {
+          btnUpdateModalAction.disabled = true;
+          await window.electronAPI.applyUpdateAndRestart();
+        } catch (err) {
+          alert('Erreur lors de l\'installation : ' + err.message);
+          btnUpdateModalAction.disabled = false;
+        }
+        return;
+      }
+
+      if (!currentUpdateData || !currentUpdateData.downloadUrl) {
+        if (currentUpdateData && currentUpdateData.htmlUrl) {
+          window.electronAPI.openExternalUrl(currentUpdateData.htmlUrl);
+        }
+        return;
+      }
+
+      try {
+        btnUpdateModalAction.disabled = true;
+        if (updateProgressSection) updateProgressSection.style.display = 'flex';
+        if (updateProgressPercent) updateProgressPercent.textContent = '0%';
+        if (updateProgressFill) updateProgressFill.style.width = '0%';
+        if (updateProgressStatus) {
+          updateProgressStatus.textContent = window.i18n ? window.i18n.t('modal_update_downloading') : 'Téléchargement en cours...';
+        }
+
+        await window.electronAPI.startDownloadUpdate(currentUpdateData.downloadUrl);
+      } catch (err) {
+        alert((window.i18n ? window.i18n.t('modal_update_error') : 'Erreur de mise à jour') + ' : ' + err.message);
+        btnUpdateModalAction.disabled = false;
+        if (updateProgressSection) updateProgressSection.style.display = 'none';
+      }
+    });
+  }
+
+  if (window.electronAPI.onUpdateDownloadProgress) {
+    window.electronAPI.onUpdateDownloadProgress((data) => {
+      if (updateProgressFill) updateProgressFill.style.width = `${data.percent}%`;
+      if (updateProgressPercent) updateProgressPercent.textContent = `${data.percent}%`;
+      if (updateProgressStatus) {
+        const transferred = formatBytesSize(data.bytesTransferred);
+        const total = formatBytesSize(data.totalBytes);
+        updateProgressStatus.textContent = `${window.i18n ? window.i18n.t('modal_update_downloading') : 'Téléchargement'} : ${transferred} / ${total}`;
+      }
+    });
+  }
+
+  if (window.electronAPI.onUpdateDownloaded) {
+    window.electronAPI.onUpdateDownloaded(() => {
+      updateActionState = 'install';
+      if (updateProgressFill) updateProgressFill.style.width = '100%';
+      if (updateProgressPercent) updateProgressPercent.textContent = '100%';
+      if (updateProgressStatus) {
+        updateProgressStatus.textContent = window.i18n ? window.i18n.t('modal_update_ready') : 'Téléchargement terminé. Prêt pour l\'installation.';
+      }
+      if (btnUpdateActionText) {
+        btnUpdateActionText.textContent = window.i18n ? window.i18n.t('modal_update_btn_install') : 'Installer et redémarrer';
+      }
+      if (btnUpdateModalAction) btnUpdateModalAction.disabled = false;
+    });
+  }
+
+  async function performUpdateCheck(manual = false) {
+    if (manual) {
+      if (btnCheckForUpdates) btnCheckForUpdates.disabled = true;
+      if (updateStatusIndicator) {
+        updateStatusIndicator.textContent = window.i18n ? window.i18n.t('settings_updates_checking') : 'Vérification en cours...';
+        updateStatusIndicator.style.color = 'var(--text-secondary)';
+      }
+    }
+
+    try {
+      const res = await window.electronAPI.checkForUpdates();
+      if (res && res.hasUpdate) {
+        if (sidebarUpdateBadge) sidebarUpdateBadge.style.display = 'inline-block';
+        if (updateStatusIndicator) {
+          updateStatusIndicator.textContent = `${window.i18n ? window.i18n.t('settings_updates_available') : 'Nouvelle version disponible !'} (v${res.latestVersion})`;
+          updateStatusIndicator.style.color = '#2563eb';
+        }
+        openUpdateModal(res);
+      } else {
+        if (sidebarUpdateBadge) sidebarUpdateBadge.style.display = 'none';
+        if (updateStatusIndicator) {
+          updateStatusIndicator.textContent = window.i18n ? window.i18n.t('settings_updates_up_to_date') : 'Votre application est à jour.';
+          updateStatusIndicator.style.color = 'var(--text-secondary)';
+        }
+      }
+    } catch (err) {
+      if (manual && updateStatusIndicator) {
+        updateStatusIndicator.textContent = (window.i18n ? window.i18n.t('modal_update_error') : 'Erreur') + ' : ' + err.message;
+        updateStatusIndicator.style.color = '#dc2626';
+      }
+    } finally {
+      if (manual && btnCheckForUpdates) {
+        btnCheckForUpdates.disabled = false;
+      }
+    }
+  }
+
+  if (btnCheckForUpdates) {
+    btnCheckForUpdates.addEventListener('click', () => performUpdateCheck(true));
+  }
+
+  try {
+    window.electronAPI.getAppVersion().then((v) => {
+      if (appCurrentVersionText && v) {
+        appCurrentVersionText.textContent = `DesktopServer v${v}`;
+      }
+    });
+  } catch (e) {}
+
+  if (toggleAutoCheckUpdates) {
+    const savedAutoCheck = localStorage.getItem('desktopserver_autocheck_updates');
+    if (savedAutoCheck !== null) {
+      toggleAutoCheckUpdates.checked = savedAutoCheck === 'true';
+    }
+    toggleAutoCheckUpdates.addEventListener('change', () => {
+      localStorage.setItem('desktopserver_autocheck_updates', toggleAutoCheckUpdates.checked ? 'true' : 'false');
+    });
+
+    if (toggleAutoCheckUpdates.checked) {
+      setTimeout(() => {
+        performUpdateCheck(false);
+      }, 3500);
+    }
+  }
 });

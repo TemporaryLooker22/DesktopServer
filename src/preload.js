@@ -78,5 +78,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getInitialLanguage: () => ipcRenderer.invoke('get-initial-language'),
 
   // Événement de navigation depuis le menu contextuel du Tray
-  onNavToTab: (callback) => ipcRenderer.on('nav-to-tab', (e, tab) => callback(tab))
+  onNavToTab: (callback) => ipcRenderer.on('nav-to-tab', (e, tab) => callback(tab)),
+
+  // Moteur de mise a jour logicielle intra-application
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  startDownloadUpdate: (assetUrl) => ipcRenderer.invoke('start-download-update', assetUrl),
+  applyUpdateAndRestart: () => ipcRenderer.invoke('apply-update-and-restart'),
+  onUpdateDownloadProgress: (callback) => ipcRenderer.on('update-download-progress', (e, data) => callback(data)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (e, data) => callback(data))
 });

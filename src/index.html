@@ -60,6 +60,7 @@
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
             <span data-i18n="nav_settings">Paramètres</span>
+            <span id="sidebarUpdateBadge" class="sidebar-update-badge" style="display: none;"></span>
           </button>
         </nav>
       </div>
@@ -407,6 +408,37 @@
                 </div>
                 <label class="toggle">
                   <input type="checkbox" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+          <div class="settings-group">
+            <h2 class="group-title" data-i18n="settings_updates_title">Mises à jour</h2>
+            <div class="setting-card">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_updates_current">Version installée</span>
+                  <span class="setting-subtext" id="appCurrentVersionText">DesktopServer v1.0.0</span>
+                </div>
+                <div class="setting-actions-wrap" style="display: flex; align-items: center; gap: 12px;">
+                  <span id="updateStatusIndicator" class="setting-status-subtext" data-i18n="settings_updates_up_to_date">Votre application est à jour.</span>
+                  <button id="btnCheckForUpdates" class="action-btn btn-action-secondary" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span data-i18n="settings_updates_check_btn">Vérifier les mises à jour</span>
+                  </button>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label" data-i18n="settings_updates_auto_check">Vérification automatique au démarrage</span>
+                  <span class="setting-subtext" data-i18n="settings_updates_auto_check_sub">Rechercher automatiquement les nouvelles versions au lancement.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="toggleAutoCheckUpdates" checked>
                   <span class="toggle-slider"></span>
                 </label>
               </div>
@@ -1971,6 +2003,51 @@
             <span data-i18n="btn_activate_pinggy">Activer Pinggy (Automatique)</span>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Mise a jour logicielle & Nouvelles fonctionnalites -->
+  <div id="modalUpdate" class="ds-modal-backdrop" style="display: none;">
+    <div class="ds-modal-card update-modal-card">
+      <div class="modal-top-header">
+        <div class="modal-title-wrap">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h3 class="ds-modal-title" data-i18n="modal_update_title">Mise à jour logicielle disponible</h3>
+            <span id="updateModalBadge" class="update-version-badge">v1.1.0</span>
+          </div>
+          <p class="modal-subtitle" id="updateModalDate"></p>
+        </div>
+        <button type="button" id="btnUpdateModalClose" class="modal-close-btn" aria-label="Fermer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="update-changelog-section">
+        <span class="update-section-title" data-i18n="modal_update_features">Nouvelles fonctionnalités et améliorations</span>
+        <div id="updateChangelogContent" class="update-changelog-box"></div>
+      </div>
+
+      <div id="updateProgressSection" class="update-progress-container" style="display: none;">
+        <div class="update-progress-info">
+          <span id="updateProgressStatus" class="update-progress-text" data-i18n="modal_update_downloading">Téléchargement en cours...</span>
+          <span id="updateProgressPercent" class="update-progress-percent">0%</span>
+        </div>
+        <div class="update-progress-track">
+          <div id="updateProgressFill" class="update-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <div class="ds-modal-actions">
+        <button type="button" id="btnUpdateModalLater" class="action-btn btn-action-secondary" data-i18n="modal_update_btn_later">Plus tard</button>
+        <button type="button" id="btnUpdateModalAction" class="action-btn btn-action-primary">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="btnUpdateActionText" data-i18n="modal_update_btn_download">Télécharger et installer</span>
+        </button>
       </div>
     </div>
   </div>
