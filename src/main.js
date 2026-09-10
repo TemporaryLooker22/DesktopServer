@@ -415,82 +415,155 @@ function extractArchive(archivePath, destDir) {
 }
 const extractZipArchive = extractArchive;
 
-// Téléchargement, stockage permanent et réutilisation automatique du Java adapté (Windows, macOS ARM/Intel, Linux)
-async function getOrInstallJavaRuntime(mcVersion, onProgress) {
-  const targetJavaVer = getRequiredJavaVersion(mcVersion);
+// Teste la validite reelle d'un executable Java (verifie l'absence de crash dyld ou de symboles manquants)
+function testJavaExecutable(javaPath) {
+  if (!javaPath) return false;
+  try {
+    const res = child_process.spawnSync(javaPath, ['-version'], { stdio: 'pipe', encoding: 'utf8', timeout: 5000 });
+    return res.status === 0;
+  } catch (e) {
+    return false;
+  }
+}
 
-  // 1. RÉUTILISATION IMMÉDIATE si déjà stocké de façon permanente
-  const existingDedicatedExe = findExistingJavaRuntime(targetJavaVer);
-  if (existingDedicatedExe) {
-    if (onProgress) {
-      onProgress(100, 0, 0, `Java ${targetJavaVer} déjà installé : réutilisation instantanée sans téléchargement.`);
+// Detecte si le systeme macOS est anterieur a macOS 11 Big Sur (ex: macOS 10.13 High Sierra, 10.14 Mojave, 10.15 Catalina)
+function isMacOlderThanBigSur() {
+  if (process.platform !== 'darwin') return false;
+  try {
+    const darwinMajor = parseInt(os.release().split('.')[0], 10);
+    return darwinMajor < 20; // Darwin 20 = macOS 11.0 Big Sur
+  } catch (e) {
+    return false;
+  }
+}
+
+// Resolution dynamique BellSoft Liberica JRE (certifiee sans symbole manquant pour macOS 10.12+)
+async function getLibericaDownloadUrl(featureVer, isArm64) {
+  const arch = isArm64 ? 'arm' : 'x86';
+  const apiUrl = `https://api.bell-sw.com/v1/liberica/releases?version-feature=${featureVer}&version-modifier=latest&bitness=64&os=macos&arch=${arch}&package-type=tar.gz&bundle-type=jre`;
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const req = https.get(apiUrl, { headers: { 'User-Agent': 'DesktopServer' } }, (resp) => {
+        if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+          https.get(resp.headers.location, { headers: { 'User-Agent': 'DesktopServer' } }, (r2) => {
+            let body = '';
+            r2.on('data', chunk => body += chunk);
+            r2.on('end', () => resolve(body));
+          }).on('error', reject);
+          return;
+        }
+        let body = '';
+        resp.on('data', chunk => body += chunk);
+        resp.on('end', () => resolve(body));
+      });
+      req.on('error', reject);
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')); });
+    });
+    const parsed = JSON.parse(res);
+    if (parsed && parsed.length > 0 && parsed[0].downloadUrl) {
+      return parsed[0].downloadUrl;
     }
-    return existingDedicatedExe;
+  } catch (err) {}
+  return null;
+}
+
+// Telechargement, stockage permanent et verification de validite du runtime Java adapte (Windows, macOS ARM/Intel, Linux)
+async function getOrInstallJavaRuntime(mcVersion, onProgress) {
+  let targetJavaVer = getRequiredJavaVersion(mcVersion);
+  const isMac = process.platform === 'darwin';
+  const isArm64 = process.arch === 'arm64';
+
+  // Sur macOS < 11 (High Sierra, Mojave, Catalina), Java 21 est la version maximale supportee (100% compatible Minecraft)
+  if (isMacOlderThanBigSur() && targetJavaVer > 21) {
+    targetJavaVer = 21;
   }
 
-  // 2. Réutilisation si Java 8 déjà installé localement sur le système Windows
+  // 1. REUTILISATION IMMÉDIATE si deja stocke et certifie fonctionnel (evite les runtimes corrompus ou dyld manquants)
+  const existingDedicatedExe = findExistingJavaRuntime(targetJavaVer);
+  if (existingDedicatedExe) {
+    if (testJavaExecutable(existingDedicatedExe)) {
+      if (onProgress) {
+        onProgress(100, 0, 0, `Java ${targetJavaVer} deja installe : reutilisation instantanee sans telechargement.`);
+      }
+      return existingDedicatedExe;
+    } else {
+      // Binaire incompatible avec cet OS (ex: crash dyld ____chkstk_darwin) -> suppression et reinstallation automatique
+      console.warn(`Java ${targetJavaVer} dans ${existingDedicatedExe} non fonctionnel sur cet OS, nettoyage automatique...`);
+      try {
+        const runtimesDir = getPersistentJavaRuntimesDir();
+        const dedicatedDir = path.join(runtimesDir, `java-${targetJavaVer}`);
+        fs.rmSync(dedicatedDir, { recursive: true, force: true });
+      } catch (e) {}
+    }
+  }
+
+  // 2. Reutilisation si Java 8 deja installe localement sur le systeme Windows
   if (targetJavaVer === 8 && process.platform === 'win32') {
     const defaultJre8 = 'C:\\Program Files\\Java\\jre1.8.0_461\\bin\\java.exe';
-    if (fs.existsSync(defaultJre8)) {
+    if (fs.existsSync(defaultJre8) && testJavaExecutable(defaultJre8)) {
       if (onProgress) {
-        onProgress(100, 0, 0, `Java 8 système détecté : réutilisation.`);
+        onProgress(100, 0, 0, `Java 8 systeme detecte : reutilisation.`);
       }
       return defaultJre8;
     }
   }
 
-  // 3. Réutilisation si le Java système du PATH est compatible
+  // 3. Reutilisation si le Java systeme du PATH est compatible et operationnel
   const systemMajor = getSystemJavaMajorVersion();
-  if (systemMajor) {
+  if (systemMajor && testJavaExecutable('java')) {
     if (targetJavaVer === 25 && systemMajor >= 25) {
-      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} présent dans le PATH : réutilisation.`);
+      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} present dans le PATH : reutilisation.`);
       return 'java';
     }
-    if (targetJavaVer === 21 && (systemMajor === 21 || systemMajor === 22 || systemMajor === 23 || systemMajor === 24)) {
-      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} présent dans le PATH : réutilisation.`);
+    if (targetJavaVer === 21 && systemMajor >= 21) {
+      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} present dans le PATH : reutilisation.`);
       return 'java';
     }
-    if (targetJavaVer === 17 && (systemMajor === 17 || systemMajor === 21)) {
-      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} compatible : réutilisation.`);
+    if (targetJavaVer === 17 && (systemMajor === 17 || systemMajor >= 21)) {
+      if (onProgress) onProgress(100, 0, 0, `Java ${systemMajor} compatible : reutilisation.`);
       return 'java';
     }
     if (targetJavaVer === 8 && systemMajor === 8) {
-      if (onProgress) onProgress(100, 0, 0, `Java 8 présent dans le PATH : réutilisation.`);
+      if (onProgress) onProgress(100, 0, 0, `Java 8 present dans le PATH : reutilisation.`);
       return 'java';
     }
   }
 
-  // 4. Premier téléchargement unique vers le dossier persistant
+  // 4. Premier telechargement unique vers le dossier persistant
   const runtimesDir = getPersistentJavaRuntimesDir();
   const dedicatedDir = path.join(runtimesDir, `java-${targetJavaVer}`);
 
   if (onProgress) {
-    onProgress(0, 0, 0, `Téléchargement unique de Java ${targetJavaVer} (pour Minecraft ${mcVersion})...`);
+    onProgress(0, 0, 0, `Telechargement unique de Java ${targetJavaVer} (pour Minecraft ${mcVersion})...`);
   }
 
-  const isMac = process.platform === 'darwin';
-  const isArm64 = process.arch === 'arm64';
-  let osSlug = 'windows';
-  let archSlug = 'x64';
-  let ext = 'zip';
+  let ext = (isMac || process.platform === 'linux') ? 'tar.gz' : 'zip';
+  let downloadUrl = '';
 
   if (isMac) {
-    osSlug = 'mac';
-    archSlug = isArm64 ? 'aarch64' : 'x64';
-    ext = 'tar.gz';
-  } else if (process.platform === 'linux') {
-    osSlug = 'linux';
-    archSlug = isArm64 ? 'aarch64' : 'x64';
-    ext = 'tar.gz';
+    // Sur macOS, BellSoft Liberica JRE est imperatif : compile pour macOS 10.12+ sans dependance a ____chkstk_darwin
+    downloadUrl = await getLibericaDownloadUrl(targetJavaVer, isArm64);
+    if (!downloadUrl) {
+      const archKey = isArm64 ? 'aarch64' : 'amd64';
+      const staticFallbacks = {
+        8: `https://github.com/bell-sw/Liberica/releases/download/8u504+1/bellsoft-jre8u504+1-macos-${archKey}.tar.gz`,
+        17: `https://github.com/bell-sw/Liberica/releases/download/17.0.20.1+1/bellsoft-jre17.0.20.1+1-macos-${archKey}.tar.gz`,
+        21: `https://github.com/bell-sw/Liberica/releases/download/21.0.12.1+1/bellsoft-jre21.0.12.1+1-macos-${archKey}.tar.gz`
+      };
+      downloadUrl = staticFallbacks[targetJavaVer] || `https://api.adoptium.net/v3/binary/latest/${targetJavaVer}/ga/mac/${isArm64 ? 'aarch64' : 'x64'}/jre/hotspot/normal/eclipse`;
+    }
+  } else {
+    let osSlug = process.platform === 'win32' ? 'windows' : 'linux';
+    let archSlug = isArm64 ? 'aarch64' : 'x64';
+    downloadUrl = `https://api.adoptium.net/v3/binary/latest/${targetJavaVer}/ga/${osSlug}/${archSlug}/jre/hotspot/normal/eclipse`;
   }
 
-  const adoptiumUrl = `https://api.adoptium.net/v3/binary/latest/${targetJavaVer}/ga/${osSlug}/${archSlug}/jre/hotspot/normal/eclipse`;
   const tempArchive = path.join(runtimesDir, `jre_${targetJavaVer}_${Date.now()}.${ext}`);
 
   try {
-    await downloadFile(adoptiumUrl, tempArchive, (percent, cur, total) => {
+    await downloadFile(downloadUrl, tempArchive, (percent, cur, total) => {
       if (onProgress) {
-        onProgress(percent, cur, total, `Téléchargement de Java ${targetJavaVer} : ${percent}% (${cur} / ${total} Mo)`);
+        onProgress(percent, cur, total, `Telechargement de Java ${targetJavaVer} : ${percent}% (${cur} / ${total} Mo)`);
       }
     });
 
@@ -505,20 +578,20 @@ async function getOrInstallJavaRuntime(mcVersion, onProgress) {
     } catch (e) {}
 
     const installedExe = findJavaBin(dedicatedDir);
-    if (installedExe) {
+    if (installedExe && testJavaExecutable(installedExe)) {
       if (onProgress) {
-        onProgress(100, 0, 0, `Java ${targetJavaVer} stocké avec succès dans ${dedicatedDir}`);
+        onProgress(100, 0, 0, `Java ${targetJavaVer} stocke avec succes dans ${dedicatedDir}`);
       }
       return installedExe;
     }
   } catch (err) {
-    console.error(`Erreur lors du téléchargement/installation de Java ${targetJavaVer}:`, err);
+    console.error(`Erreur lors du telechargement/installation de Java ${targetJavaVer}:`, err);
     try {
       if (fs.existsSync(tempArchive)) fs.unlinkSync(tempArchive);
     } catch (e) {}
   }
 
-  // Fallback si échec de l'installation dédiée
+  // Fallback si echec de l'installation dediee
   if (targetJavaVer === 8 && process.platform === 'win32' && fs.existsSync('C:\\Program Files\\Java\\jre1.8.0_461\\bin\\java.exe')) {
     return 'C:\\Program Files\\Java\\jre1.8.0_461\\bin\\java.exe';
   }
