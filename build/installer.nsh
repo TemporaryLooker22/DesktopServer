@@ -116,10 +116,8 @@ FunctionEnd
     FileClose $0
   ${EndIf}
 
-  # 3. Redemarrage automatique apres mise a jour silencieuse
-  ${If} ${Silent}
-    Exec '"$INSTDIR\DesktopServer.exe"'
-  ${EndIf}
+  # 3. Redemarrage automatique : gere par le script PowerShell de mise a jour (ds_update_runner.ps1)
+  # Ne pas lancer l'application ici pour eviter un double lancement.
 !macroend
 
 !endif

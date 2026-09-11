@@ -4078,97 +4078,90 @@ function selectBestUpdateAsset(assets) {
   return null;
 }
 
-function fetchLatestReleaseFromWebRedirect() {
+function fetchUrlText(url, headers = {}, _redirectCount = 0) {
   return new Promise((resolve) => {
-    const webUrl = 'https://github.com/TemporaryLooker22/DesktopServer/releases';
-    const req = https.get(webUrl, { headers: { 'User-Agent': 'DesktopServer-App' } }, (res) => {
+    if (_redirectCount > 10) return resolve(null);
+    const parsedUrl = new URL(url);
+    const httpModule = parsedUrl.protocol === 'http:' ? http : https;
+    const options = {
+      headers: { 'User-Agent': 'DesktopServer-App', ...headers },
+      timeout: 10000
+    };
+    const req = httpModule.get(url, options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        let redirectUrl = res.headers.location;
+        if (redirectUrl.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
+        }
+        return fetchUrlText(redirectUrl, headers, _redirectCount + 1).then(resolve);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return resolve(null);
+      }
       let body = '';
       res.on('data', c => body += c);
-      res.on('end', () => {
-        const match = body.match(/\/releases\/tag\/(v?[0-9.]+)/i);
-        if (match && match[1]) {
-          const tag = match[1];
-          resolve({
-            tag_name: tag,
-            name: `DesktopServer ${tag}`,
-            body: 'Nouvelle version logicielle disponible sur GitHub.',
-            published_at: new Date().toISOString(),
-            assets: [
-              {
-                name: 'DesktopServer-Setup.exe',
-                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-Setup.exe`
-              },
-              {
-                name: 'DesktopServer-HighSierra.dmg',
-                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-HighSierra.dmg`
-              },
-              {
-                name: 'DesktopServer.dmg',
-                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer.dmg`
-              },
-              {
-                name: 'DesktopServer-arm64.dmg',
-                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-arm64.dmg`
-              }
-            ]
-          });
-        } else {
-          resolve(null);
-        }
-      });
+      res.on('end', () => resolve(body));
+      res.on('error', () => resolve(null));
     });
     req.on('error', () => resolve(null));
-    req.setTimeout(5000, () => {
-      req.destroy();
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+function fetchLatestReleaseFromWebRedirect() {
+  return new Promise(async (resolve) => {
+    try {
+      const body = await fetchUrlText('https://github.com/TemporaryLooker22/DesktopServer/releases');
+      if (!body) return resolve(null);
+      const match = body.match(/\/releases\/tag\/(v?[0-9.]+)/i);
+      if (match && match[1]) {
+        const tag = match[1];
+        resolve({
+          tag_name: tag,
+          name: `DesktopServer ${tag}`,
+          body: 'Nouvelle version logicielle disponible sur GitHub.',
+          published_at: new Date().toISOString(),
+          assets: [
+            {
+              name: 'DesktopServer-Setup.exe',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-Setup.exe`
+            },
+            {
+              name: 'DesktopServer-HighSierra.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-HighSierra.dmg`
+            },
+            {
+              name: 'DesktopServer.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer.dmg`
+            },
+            {
+              name: 'DesktopServer-arm64.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-arm64.dmg`
+            }
+          ]
+        });
+      } else {
+        resolve(null);
+      }
+    } catch (e) {
       resolve(null);
-    });
+    }
   });
 }
 
 async function fetchLatestGitHubRelease() {
   const apiUrl = 'https://api.github.com/repos/TemporaryLooker22/DesktopServer/releases/latest';
-  const apiRelease = await new Promise((resolve) => {
-    const options = {
-      headers: {
-        'User-Agent': 'DesktopServer-App',
-        'Accept': 'application/vnd.github.v3+json'
+  try {
+    const body = await fetchUrlText(apiUrl, { 'Accept': 'application/vnd.github.v3+json' });
+    if (body) {
+      const release = JSON.parse(body);
+      if (release && release.tag_name && release.assets && release.assets.length > 0) {
+        return release;
       }
-    };
-    const req = https.get(apiUrl, options, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        https.get(res.headers.location, options, (r2) => {
-          let body = '';
-          r2.on('data', c => body += c);
-          r2.on('end', () => {
-            try { resolve(JSON.parse(body)); } catch (e) { resolve(null); }
-          });
-        }).on('error', () => resolve(null));
-        return;
-      }
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => {
-        try {
-          if (res.statusCode === 200) {
-            resolve(JSON.parse(body));
-          } else {
-            resolve(null);
-          }
-        } catch (e) {
-          resolve(null);
-        }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(5000, () => {
-      req.destroy();
-      resolve(null);
-    });
-  });
-
-  if (apiRelease && apiRelease.tag_name && apiRelease.assets && apiRelease.assets.length > 0) {
-    return apiRelease;
-  }
+    }
+  } catch (e) {}
 
   // Fallback direct web redirect sans quota / rate-limit GitHub API
   return await fetchLatestReleaseFromWebRedirect();
@@ -4211,14 +4204,32 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
-function downloadUpdateFileStream(url, destPath, onProgress) {
+function downloadUpdateFileStream(url, destPath, onProgress, _redirectCount = 0) {
   return new Promise((resolve, reject) => {
-    const handleResponse = (res) => {
+    if (_redirectCount > 10) {
+      return reject(new Error('Trop de redirections lors du telechargement.'));
+    }
+
+    const parsedUrl = new URL(url);
+    const httpModule = parsedUrl.protocol === 'http:' ? http : https;
+    const requestOptions = {
+      headers: { 'User-Agent': 'DesktopServer-App', 'Accept': '*/*' },
+      timeout: 30000
+    };
+
+    const req = httpModule.get(url, requestOptions, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        https.get(res.headers.location, { headers: { 'User-Agent': 'DesktopServer-App' } }, handleResponse).on('error', reject);
-        return;
+        res.resume();
+        let redirectUrl = res.headers.location;
+        if (redirectUrl.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
+        }
+        return downloadUpdateFileStream(redirectUrl, destPath, onProgress, _redirectCount + 1)
+          .then(resolve).catch(reject);
       }
+
       if (res.statusCode !== 200) {
+        res.resume();
         return reject(new Error(`Echec du telechargement (HTTP ${res.statusCode})`));
       }
 
@@ -4226,17 +4237,18 @@ function downloadUpdateFileStream(url, destPath, onProgress) {
       let downloadedBytes = 0;
       const file = fs.createWriteStream(destPath);
 
+      file.on('error', (err) => {
+        res.destroy();
+        try { fs.unlinkSync(destPath); } catch (e) {}
+        reject(err);
+      });
+
       res.on('data', (chunk) => {
         downloadedBytes += chunk.length;
-        file.write(chunk);
         if (onProgress && totalBytes > 0) {
           const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
           onProgress(percent, downloadedBytes, totalBytes);
         }
-      });
-
-      res.on('end', () => {
-        file.end(() => resolve(destPath));
       });
 
       res.on('error', (err) => {
@@ -4244,9 +4256,24 @@ function downloadUpdateFileStream(url, destPath, onProgress) {
         try { fs.unlinkSync(destPath); } catch (e) {}
         reject(err);
       });
-    };
 
-    https.get(url, { headers: { 'User-Agent': 'DesktopServer-App' } }, handleResponse).on('error', reject);
+      res.pipe(file);
+
+      file.on('finish', () => {
+        file.close(() => resolve(destPath));
+      });
+    });
+
+    req.on('error', (err) => {
+      try { fs.unlinkSync(destPath); } catch (e) {}
+      reject(err);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      try { fs.unlinkSync(destPath); } catch (e) {}
+      reject(new Error('Timeout lors du telechargement de la mise a jour.'));
+    });
   });
 }
 
@@ -4291,26 +4318,105 @@ ipcMain.handle('apply-update-and-restart', async () => {
 
   if (isWin) {
     const psScriptPath = path.join(app.getPath('temp'), 'ds_update_runner.ps1');
+    const logFilePath = path.join(app.getPath('temp'), 'ds_update.log').replace(/'/g, "''");
     const safeInstaller = updatePath.replace(/'/g, "''");
-    const safeTargetExe = process.execPath.replace(/'/g, "''");
     const appPid = process.pid;
 
+    // Résoudre les chemins d'installation possibles pour retrouver l'exe après la mise à jour
+    const localAppData = (process.env.LOCALAPPDATA || '').replace(/'/g, "''");
+    const programFiles = (process.env.ProgramFiles || 'C:\\Program Files').replace(/'/g, "''");
+    const programFilesX86 = (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)').replace(/'/g, "''");
+
     const psContent = [
-      `$appPid = ${appPid}`,
-      `$installer = '${safeInstaller}'`,
-      `$targetExe = '${safeTargetExe}'`,
+      `# DesktopServer Auto-Update Runner`,
+      `# Generated at: ${new Date().toISOString()}`,
+      `$ErrorActionPreference = 'Continue'`,
+      `$logFile = '${logFilePath}'`,
+      ``,
+      `function Log($msg) {`,
+      `    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'`,
+      `    "[$ts] $msg" | Out-File -FilePath $logFile -Append -Encoding utf8`,
+      `}`,
+      ``,
+      `Log "=== Demarrage du processus de mise a jour ==="`,
+      `Log "PID de l'application: ${appPid}"`,
+      `Log "Installeur: ${safeInstaller}"`,
+      ``,
+      `# Etape 1: Attente de la fermeture de l'application (max 30 secondes)`,
+      `Log "Attente de la fermeture de l'application..."`,
+      `$maxWait = 30`,
       `$waited = 0`,
-      `while ((Get-Process -Id $appPid -ErrorAction SilentlyContinue) -and ($waited -lt 6)) {`,
+      `while ($waited -lt $maxWait) {`,
+      `    $proc = Get-Process -Id ${appPid} -ErrorAction SilentlyContinue`,
+      `    if (-not $proc) {`,
+      `        Log "Application fermee apres $waited secondes."`,
+      `        break`,
+      `    }`,
       `    Start-Sleep -Milliseconds 500`,
       `    $waited += 0.5`,
       `}`,
-      `Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue`,
-      `Start-Sleep -Milliseconds 500`,
-      `$proc = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait`,
-      `Start-Sleep -Seconds 1`,
-      `if (-not (Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue)) {`,
-      `    Start-Process -FilePath $targetExe`,
+      ``,
+      `# Etape 2: Force-kill de toutes les instances restantes`,
+      `$remaining = Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue`,
+      `if ($remaining) {`,
+      `    Log "Processus DesktopServer encore actifs, force-kill..."`,
+      `    $remaining | Stop-Process -Force -ErrorAction SilentlyContinue`,
+      `    Start-Sleep -Seconds 2`,
       `}`,
+      ``,
+      `# Etape 3: Lancement de l'installeur en mode silencieux`,
+      `Log "Lancement de l'installeur silencieux..."`,
+      `$installer = '${safeInstaller}'`,
+      `if (-not (Test-Path $installer)) {`,
+      `    Log "ERREUR: Fichier installeur introuvable: $installer"`,
+      `    exit 1`,
+      `}`,
+      ``,
+      `try {`,
+      `    $instProc = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -ErrorAction Stop`,
+      `    Log "Installeur demarre (PID: $($instProc.Id)), attente de la fin..."`,
+      `    $instProc | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue`,
+      `    Log "Installeur termine (ExitCode: $($instProc.ExitCode))"`,
+      `} catch {`,
+      `    Log "ERREUR lors de l'installation: $_"`,
+      `}`,
+      ``,
+      `Start-Sleep -Seconds 3`,
+      ``,
+      `# Etape 4: Recherche et relancement de l'application mise a jour`,
+      `Log "Recherche de l'application mise a jour..."`,
+      `$searchPaths = @(`,
+      `    (Join-Path '${localAppData}' 'Programs\\DesktopServer\\DesktopServer.exe'),`,
+      `    (Join-Path '${programFiles}' 'DesktopServer\\DesktopServer.exe'),`,
+      `    (Join-Path '${programFilesX86}' 'DesktopServer\\DesktopServer.exe')`,
+      `)`,
+      ``,
+      `$launched = $false`,
+      `foreach ($exePath in $searchPaths) {`,
+      `    Log "Verification: $exePath"`,
+      `    if (Test-Path $exePath) {`,
+      `        # Verifier qu'aucune instance n'est deja lancee par l'installeur`,
+      `        $alreadyRunning = Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue`,
+      `        if ($alreadyRunning) {`,
+      `            Log "L'application est deja lancee (probablement par l'installeur)."`,
+      `            $launched = $true`,
+      `            break`,
+      `        }`,
+      `        Log "Lancement de: $exePath"`,
+      `        Start-Process -FilePath $exePath -ErrorAction SilentlyContinue`,
+      `        $launched = $true`,
+      `        break`,
+      `    }`,
+      `}`,
+      ``,
+      `if (-not $launched) {`,
+      `    Log "AVERTISSEMENT: DesktopServer.exe non trouve dans les chemins standards."`,
+      `    Log "Chemins verifies: $($searchPaths -join ', ')"`,
+      `}`,
+      ``,
+      `# Etape 5: Nettoyage`,
+      `Start-Sleep -Seconds 2`,
+      `Log "=== Mise a jour terminee ==="`,
       `Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue`
     ].join('\r\n');
 
@@ -4328,13 +4434,26 @@ ipcMain.handle('apply-update-and-restart', async () => {
         windowsHide: true
       }).unref();
     } catch (e) {
-      child_process.spawn(updatePath, ['/S'], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }).unref();
+      // Fallback direct : lancer l'installeur sans script PowerShell
+      try {
+        child_process.spawn(updatePath, ['/S'], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        }).unref();
+      } catch (e2) {}
     }
 
+    // Arrêter proprement tous les serveurs avant de quitter
+    isQuitting = true;
+    for (const [id, proc] of activeProcesses.entries()) {
+      try {
+        if (proc.stdin && !proc.stdin.destroyed) proc.stdin.write('stop\n');
+        else proc.kill('SIGTERM');
+      } catch (e) {}
+    }
+    // Petit délai pour laisser le temps aux serveurs de commencer leur arrêt
+    await new Promise(r => setTimeout(r, 500));
     app.exit(0);
     return true;
   }
@@ -4357,9 +4476,11 @@ ipcMain.handle('apply-update-and-restart', async () => {
       'echo "Target: $TARGET_APP" >> "$LOG_FILE"',
       'echo "Update: $UPDATE_FILE" >> "$LOG_FILE"',
       '',
-      '# 1. Attente de la fermeture de l\'ancienne instance',
-      'while kill -0 "$APP_PID" 2>/dev/null; do',
+      '# 1. Attente de la fermeture de l\'ancienne instance (max 30s)',
+      'WAITED=0',
+      'while kill -0 "$APP_PID" 2>/dev/null && [ "$WAITED" -lt 60 ]; do',
       '  sleep 0.5',
+      '  WAITED=$((WAITED + 1))',
       'done',
       'sleep 1',
       '',
@@ -4437,6 +4558,7 @@ ipcMain.handle('apply-update-and-restart', async () => {
       shell.openPath(updatePath);
     }
 
+    isQuitting = true;
     app.exit(0);
     return true;
   }
