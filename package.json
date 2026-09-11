@@ -1,6 +1,6 @@
 {
   "name": "desktop-server",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Application DesktopServer épurée avec Electron",
   "main": "src/main.js",
   "scripts": {
