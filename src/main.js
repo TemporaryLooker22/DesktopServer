@@ -4236,59 +4236,153 @@ ipcMain.handle('apply-update-and-restart', async () => {
   const isMac = process.platform === 'darwin';
 
   if (isWin) {
-    child_process.spawn(updatePath, ['/S'], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
-    app.quit();
+    const batPath = path.join(app.getPath('temp'), 'ds_update_and_restart.bat');
+    const batContent = [
+      '@echo off',
+      'setlocal',
+      `set "INSTALLER=${updatePath}"`,
+      `set "TARGET_EXE=${process.execPath}"`,
+      `set "APP_PID=${process.pid}"`,
+      '',
+      'rem 1. Attente de la fermeture complete du processus DesktopServer actuel',
+      ':wait_pid',
+      'timeout /t 1 /nobreak >nul',
+      `tasklist /fi "PID eq %APP_PID%" 2>nul | findstr /i "%APP_PID%" >nul`,
+      'if not errorlevel 1 goto wait_pid',
+      '',
+      'rem 2. Delai de securite pour la liberation des verrous de fichiers',
+      'timeout /t 1 /nobreak >nul',
+      '',
+      'rem 3. Execution de l\'installateur silencieux',
+      'call "%INSTALLER%" /S',
+      '',
+      'rem 4. Delai pour laisser l\'installation se finaliser',
+      'timeout /t 2 /nobreak >nul',
+      '',
+      'rem 5. Relance de l\'application mise a jour si pas deja lancee',
+      'tasklist /fi "IMAGENAME eq DesktopServer.exe" 2>nul | findstr /i "DesktopServer.exe" >nul',
+      'if errorlevel 1 start "" "%TARGET_EXE%"',
+      '',
+      '(goto) 2>nul & del "%~f0"'
+    ].join('\r\n');
+
+    try {
+      fs.writeFileSync(batPath, batContent, 'utf8');
+      child_process.spawn('cmd.exe', ['/c', batPath], {
+        detached: true,
+        stdio: 'ignore'
+      }).unref();
+    } catch (e) {
+      child_process.spawn(updatePath, ['/S'], {
+        detached: true,
+        stdio: 'ignore'
+      }).unref();
+    }
+
+    app.exit(0);
     return true;
   }
 
   if (isMac) {
-    if (updatePath.endsWith('.dmg')) {
-      const script = [
-        'sleep 1',
-        'MOUNT_DIR=$(mktemp -d /tmp/ds_mount.XXXXXX)',
-        `hdiutil attach "${updatePath}" -nobrowse -mountpoint "$MOUNT_DIR" -quiet || exit 1`,
-        'if [ -d "$MOUNT_DIR/DesktopServer.app" ]; then',
-        '  rm -rf /Applications/DesktopServer.app',
-        '  cp -R "$MOUNT_DIR/DesktopServer.app" /Applications/',
-        '  xattr -cr /Applications/DesktopServer.app 2>/dev/null || true',
-        '  hdiutil detach "$MOUNT_DIR" -force -quiet || true',
-        '  rm -rf "$MOUNT_DIR"',
-        '  open /Applications/DesktopServer.app',
-        'else',
-        '  hdiutil detach "$MOUNT_DIR" -force -quiet || true',
-        '  rm -rf "$MOUNT_DIR"',
-        `  open "${updatePath}"`,
-        'fi'
-      ].join('\n');
+    const currentAppBundle = process.execPath.includes('.app/Contents/MacOS')
+      ? process.execPath.replace(/\/Contents\/MacOS\/[^/]+$/, '')
+      : '/Applications/DesktopServer.app';
+    const scriptPath = path.join(app.getPath('temp'), 'ds_update_and_restart.sh');
+    const scriptContent = [
+      '#!/bin/sh',
+      'set -e',
+      `APP_PID="${process.pid}"`,
+      `TARGET_APP="${currentAppBundle}"`,
+      'DEFAULT_APP="/Applications/DesktopServer.app"',
+      `UPDATE_FILE="${updatePath}"`,
+      'LOG_FILE="/tmp/ds_update.log"',
+      '',
+      'echo "[$(date)] Demarrage mise a jour..." > "$LOG_FILE"',
+      'echo "Target: $TARGET_APP" >> "$LOG_FILE"',
+      'echo "Update: $UPDATE_FILE" >> "$LOG_FILE"',
+      '',
+      '# 1. Attente de la fermeture de l\'ancienne instance',
+      'while kill -0 "$APP_PID" 2>/dev/null; do',
+      '  sleep 0.5',
+      'done',
+      'sleep 1',
+      '',
+      'TMP_DIR=$(mktemp -d /tmp/ds_update.XXXXXX)',
+      'MOUNT_DIR=""',
+      '',
+      'cleanup() {',
+      '  if [ -n "$MOUNT_DIR" ]; then',
+      '    hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true',
+      '  fi',
+      '  rm -rf "$TMP_DIR"',
+      '}',
+      'trap cleanup EXIT',
+      '',
+      'APP_SOURCE=""',
+      'case "$UPDATE_FILE" in',
+      '  *.dmg)',
+      '    echo "Attachement du DMG..." >> "$LOG_FILE"',
+      '    MOUNT_OUT=$(hdiutil attach "$UPDATE_FILE" -nobrowse -noverify -noautoopen 2>&1)',
+      '    echo "$MOUNT_OUT" >> "$LOG_FILE"',
+      '    MOUNT_DIR=$(echo "$MOUNT_OUT" | grep -o \'/Volumes/.*\' | head -n 1)',
+      '    if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR" ]; then',
+      '      APP_SOURCE=$(find "$MOUNT_DIR" -maxdepth 2 -name "DesktopServer.app" | head -n 1)',
+      '    fi',
+      '    ;;',
+      '  *.zip)',
+      '    echo "Extraction du ZIP..." >> "$LOG_FILE"',
+      '    ditto -xk "$UPDATE_FILE" "$TMP_DIR"',
+      '    APP_SOURCE=$(find "$TMP_DIR" -maxdepth 2 -name "DesktopServer.app" | head -n 1)',
+      '    ;;',
+      'esac',
+      '',
+      'echo "Source: $APP_SOURCE" >> "$LOG_FILE"',
+      '',
+      'if [ -n "$APP_SOURCE" ] && [ -d "$APP_SOURCE" ]; then',
+      '  FINAL_APP="$DEFAULT_APP"',
+      '  if [ -n "$TARGET_APP" ] && [ -d "$TARGET_APP" ]; then',
+      '    FINAL_APP="$TARGET_APP"',
+      '  fi',
+      '  echo "Installation vers $FINAL_APP..." >> "$LOG_FILE"',
+      '  rm -rf "$FINAL_APP"',
+      '  ditto "$APP_SOURCE" "$FINAL_APP"',
+      '  xattr -cr "$FINAL_APP" 2>/dev/null || true',
+      '',
+      '  if [ "$FINAL_APP" != "$DEFAULT_APP" ] && [ -d "$DEFAULT_APP" ]; then',
+      '    echo "Mise a jour secondaire de $DEFAULT_APP..." >> "$LOG_FILE"',
+      '    rm -rf "$DEFAULT_APP"',
+      '    ditto "$APP_SOURCE" "$DEFAULT_APP"',
+      '    xattr -cr "$DEFAULT_APP" 2>/dev/null || true',
+      '  fi',
+      '',
+      '  if [ -n "$MOUNT_DIR" ]; then',
+      '    hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true',
+      '    MOUNT_DIR=""',
+      '  fi',
+      '',
+      '  echo "Lancement de $FINAL_APP..." >> "$LOG_FILE"',
+      '  open "$FINAL_APP"',
+      '  echo "Mise a jour terminee avec succes." >> "$LOG_FILE"',
+      'else',
+      '  echo "Erreur: DesktopServer.app non trouve dans l\'archive." >> "$LOG_FILE"',
+      '  if [ -n "$TARGET_APP" ] && [ -d "$TARGET_APP" ]; then',
+      '    open "$TARGET_APP"',
+      '  fi',
+      'fi'
+    ].join('\n');
 
-      child_process.spawn('/bin/sh', ['-c', script], {
+    try {
+      fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
+      child_process.spawn('/bin/sh', [scriptPath], {
         detached: true,
         stdio: 'ignore'
       }).unref();
-      app.quit();
-      return true;
-    } else if (updatePath.endsWith('.zip')) {
-      const script = [
-        'sleep 1',
-        `unzip -q -o "${updatePath}" -d /Applications/`,
-        'xattr -cr /Applications/DesktopServer.app 2>/dev/null || true',
-        'open /Applications/DesktopServer.app'
-      ].join('\n');
-
-      child_process.spawn('/bin/sh', ['-c', script], {
-        detached: true,
-        stdio: 'ignore'
-      }).unref();
-      app.quit();
-      return true;
-    } else {
+    } catch (e) {
       shell.openPath(updatePath);
-      app.quit();
-      return true;
     }
+
+    app.exit(0);
+    return true;
   }
 
   return false;

@@ -73,6 +73,14 @@ FunctionEnd
   Page custom ShowCustomOptionsPage LeaveCustomOptionsPage
 !macroend
 
+!macro customInit
+  ${If} ${Silent}
+    Sleep 1500
+    nsExec::Exec 'taskkill /F /IM DesktopServer.exe'
+    Sleep 500
+  ${EndIf}
+!macroend
+
 !macro customInstallmode
   StrCpy $isForceCurrentInstall "1"
 !macroend
@@ -114,6 +122,11 @@ FunctionEnd
     FileOpen $0 "$INSTDIR\default-language.json" w
     FileWrite $0 '{"language":"fr"}'
     FileClose $0
+  ${EndIf}
+
+  # 3. Redemarrage automatique apres mise a jour silencieuse
+  ${If} ${Silent}
+    Exec '"$INSTDIR\DesktopServer.exe"'
   ${EndIf}
 !macroend
 
