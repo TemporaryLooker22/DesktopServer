@@ -73,14 +73,6 @@ FunctionEnd
   Page custom ShowCustomOptionsPage LeaveCustomOptionsPage
 !macroend
 
-!macro customInit
-  ${If} ${Silent}
-    Sleep 1500
-    nsExec::Exec 'taskkill /F /IM DesktopServer.exe'
-    Sleep 500
-  ${EndIf}
-!macroend
-
 !macro customInstallmode
   StrCpy $isForceCurrentInstall "1"
 !macroend

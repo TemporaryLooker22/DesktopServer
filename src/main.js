@@ -4236,46 +4236,48 @@ ipcMain.handle('apply-update-and-restart', async () => {
   const isMac = process.platform === 'darwin';
 
   if (isWin) {
-    const batPath = path.join(app.getPath('temp'), 'ds_update_and_restart.bat');
-    const batContent = [
-      '@echo off',
-      'setlocal',
-      `set "INSTALLER=${updatePath}"`,
-      `set "TARGET_EXE=${process.execPath}"`,
-      `set "APP_PID=${process.pid}"`,
-      '',
-      'rem 1. Attente de la fermeture complete du processus DesktopServer actuel',
-      ':wait_pid',
-      'timeout /t 1 /nobreak >nul',
-      `tasklist /fi "PID eq %APP_PID%" 2>nul | findstr /i "%APP_PID%" >nul`,
-      'if not errorlevel 1 goto wait_pid',
-      '',
-      'rem 2. Delai de securite pour la liberation des verrous de fichiers',
-      'timeout /t 1 /nobreak >nul',
-      '',
-      'rem 3. Execution de l\'installateur silencieux',
-      'call "%INSTALLER%" /S',
-      '',
-      'rem 4. Delai pour laisser l\'installation se finaliser',
-      'timeout /t 2 /nobreak >nul',
-      '',
-      'rem 5. Relance de l\'application mise a jour si pas deja lancee',
-      'tasklist /fi "IMAGENAME eq DesktopServer.exe" 2>nul | findstr /i "DesktopServer.exe" >nul',
-      'if errorlevel 1 start "" "%TARGET_EXE%"',
-      '',
-      '(goto) 2>nul & del "%~f0"'
+    const psScriptPath = path.join(app.getPath('temp'), 'ds_update_runner.ps1');
+    const safeInstaller = updatePath.replace(/'/g, "''");
+    const safeTargetExe = process.execPath.replace(/'/g, "''");
+    const appPid = process.pid;
+
+    const psContent = [
+      `$appPid = ${appPid}`,
+      `$installer = '${safeInstaller}'`,
+      `$targetExe = '${safeTargetExe}'`,
+      `$waited = 0`,
+      `while ((Get-Process -Id $appPid -ErrorAction SilentlyContinue) -and ($waited -lt 6)) {`,
+      `    Start-Sleep -Milliseconds 500`,
+      `    $waited += 0.5`,
+      `}`,
+      `Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue`,
+      `Start-Sleep -Milliseconds 500`,
+      `$proc = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait`,
+      `Start-Sleep -Seconds 1`,
+      `if (-not (Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue)) {`,
+      `    Start-Process -FilePath $targetExe`,
+      `}`,
+      `Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue`
     ].join('\r\n');
 
     try {
-      fs.writeFileSync(batPath, batContent, 'utf8');
-      child_process.spawn('cmd.exe', ['/c', batPath], {
+      fs.writeFileSync(psScriptPath, psContent, 'utf8');
+      child_process.spawn('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-WindowStyle', 'Hidden',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', psScriptPath
+      ], {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        windowsHide: true
       }).unref();
     } catch (e) {
       child_process.spawn(updatePath, ['/S'], {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        windowsHide: true
       }).unref();
     }
 
