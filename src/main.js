@@ -4078,24 +4078,68 @@ function selectBestUpdateAsset(assets) {
   return null;
 }
 
+function fetchLatestReleaseFromWebRedirect() {
+  return new Promise((resolve) => {
+    const webUrl = 'https://github.com/TemporaryLooker22/DesktopServer/releases/latest';
+    const req = https.get(webUrl, { headers: { 'User-Agent': 'DesktopServer-App' } }, (res) => {
+      const location = res.headers.location || '';
+      const match = location.match(/\/releases\/tag\/(v?[0-9.]+)/i);
+      if (match && match[1]) {
+        const tag = match[1];
+        resolve({
+          tag_name: tag,
+          name: `DesktopServer ${tag}`,
+          body: 'Nouvelle version logicielle disponible sur GitHub.',
+          published_at: new Date().toISOString(),
+          assets: [
+            {
+              name: 'DesktopServer-Setup.exe',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-Setup.exe`
+            },
+            {
+              name: 'DesktopServer-HighSierra.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-HighSierra.dmg`
+            },
+            {
+              name: 'DesktopServer.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer.dmg`
+            },
+            {
+              name: 'DesktopServer-arm64.dmg',
+              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-arm64.dmg`
+            }
+          ]
+        });
+      } else {
+        resolve(null);
+      }
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(5000, () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
 async function fetchLatestGitHubRelease() {
-  const url = 'https://api.github.com/repos/TemporaryLooker22/DesktopServer/releases/latest';
-  return new Promise((resolve, reject) => {
+  const apiUrl = 'https://api.github.com/repos/TemporaryLooker22/DesktopServer/releases/latest';
+  const apiRelease = await new Promise((resolve) => {
     const options = {
       headers: {
         'User-Agent': 'DesktopServer-App',
         'Accept': 'application/vnd.github.v3+json'
       }
     };
-    const req = https.get(url, options, (res) => {
+    const req = https.get(apiUrl, options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         https.get(res.headers.location, options, (r2) => {
           let body = '';
           r2.on('data', c => body += c);
           r2.on('end', () => {
-            try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+            try { resolve(JSON.parse(body)); } catch (e) { resolve(null); }
           });
-        }).on('error', reject);
+        }).on('error', () => resolve(null));
         return;
       }
       let body = '';
@@ -4108,16 +4152,23 @@ async function fetchLatestGitHubRelease() {
             resolve(null);
           }
         } catch (e) {
-          reject(e);
+          resolve(null);
         }
       });
     });
-    req.on('error', reject);
-    req.setTimeout(8000, () => {
+    req.on('error', () => resolve(null));
+    req.setTimeout(5000, () => {
       req.destroy();
-      reject(new Error('Timeout de connexion a GitHub'));
+      resolve(null);
     });
   });
+
+  if (apiRelease && apiRelease.tag_name && apiRelease.assets && apiRelease.assets.length > 0) {
+    return apiRelease;
+  }
+
+  // Fallback direct web redirect sans quota / rate-limit GitHub API
+  return await fetchLatestReleaseFromWebRedirect();
 }
 
 ipcMain.handle('get-app-version', () => {
