@@ -4080,39 +4080,42 @@ function selectBestUpdateAsset(assets) {
 
 function fetchLatestReleaseFromWebRedirect() {
   return new Promise((resolve) => {
-    const webUrl = 'https://github.com/TemporaryLooker22/DesktopServer/releases/latest';
+    const webUrl = 'https://github.com/TemporaryLooker22/DesktopServer/releases';
     const req = https.get(webUrl, { headers: { 'User-Agent': 'DesktopServer-App' } }, (res) => {
-      const location = res.headers.location || '';
-      const match = location.match(/\/releases\/tag\/(v?[0-9.]+)/i);
-      if (match && match[1]) {
-        const tag = match[1];
-        resolve({
-          tag_name: tag,
-          name: `DesktopServer ${tag}`,
-          body: 'Nouvelle version logicielle disponible sur GitHub.',
-          published_at: new Date().toISOString(),
-          assets: [
-            {
-              name: 'DesktopServer-Setup.exe',
-              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-Setup.exe`
-            },
-            {
-              name: 'DesktopServer-HighSierra.dmg',
-              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-HighSierra.dmg`
-            },
-            {
-              name: 'DesktopServer.dmg',
-              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer.dmg`
-            },
-            {
-              name: 'DesktopServer-arm64.dmg',
-              browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-arm64.dmg`
-            }
-          ]
-        });
-      } else {
-        resolve(null);
-      }
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        const match = body.match(/\/releases\/tag\/(v?[0-9.]+)/i);
+        if (match && match[1]) {
+          const tag = match[1];
+          resolve({
+            tag_name: tag,
+            name: `DesktopServer ${tag}`,
+            body: 'Nouvelle version logicielle disponible sur GitHub.',
+            published_at: new Date().toISOString(),
+            assets: [
+              {
+                name: 'DesktopServer-Setup.exe',
+                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-Setup.exe`
+              },
+              {
+                name: 'DesktopServer-HighSierra.dmg',
+                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-HighSierra.dmg`
+              },
+              {
+                name: 'DesktopServer.dmg',
+                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer.dmg`
+              },
+              {
+                name: 'DesktopServer-arm64.dmg',
+                browser_download_url: `https://github.com/TemporaryLooker22/DesktopServer/releases/download/${tag}/DesktopServer-arm64.dmg`
+              }
+            ]
+          });
+        } else {
+          resolve(null);
+        }
+      });
     });
     req.on('error', () => resolve(null));
     req.setTimeout(5000, () => {
