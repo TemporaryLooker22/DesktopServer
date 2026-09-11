@@ -4317,124 +4317,80 @@ ipcMain.handle('apply-update-and-restart', async () => {
   const isMac = process.platform === 'darwin';
 
   if (isWin) {
-    const psScriptPath = path.join(app.getPath('temp'), 'ds_update_runner.ps1');
-    const logFilePath = path.join(app.getPath('temp'), 'ds_update.log').replace(/'/g, "''");
-    const safeInstaller = updatePath.replace(/'/g, "''");
+    const batScriptPath = path.join(app.getPath('temp'), 'ds_update_runner.bat');
+    const logFilePath = path.join(app.getPath('temp'), 'ds_update.log');
     const appPid = process.pid;
+    const targetExe = process.execPath;
+    const localAppDataExe = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'DesktopServer', 'DesktopServer.exe');
 
-    // Résoudre les chemins d'installation possibles pour retrouver l'exe après la mise à jour
-    const localAppData = (process.env.LOCALAPPDATA || '').replace(/'/g, "''");
-    const programFiles = (process.env.ProgramFiles || 'C:\\Program Files').replace(/'/g, "''");
-    const programFilesX86 = (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)').replace(/'/g, "''");
-
-    const psContent = [
-      `# DesktopServer Auto-Update Runner`,
-      `# Generated at: ${new Date().toISOString()}`,
-      `$ErrorActionPreference = 'Continue'`,
-      `$logFile = '${logFilePath}'`,
-      ``,
-      `function Log($msg) {`,
-      `    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'`,
-      `    "[$ts] $msg" | Out-File -FilePath $logFile -Append -Encoding utf8`,
-      `}`,
-      ``,
-      `Log "=== Demarrage du processus de mise a jour ==="`,
-      `Log "PID de l'application: ${appPid}"`,
-      `Log "Installeur: ${safeInstaller}"`,
-      ``,
-      `# Etape 1: Attente de la fermeture de l'application (max 30 secondes)`,
-      `Log "Attente de la fermeture de l'application..."`,
-      `$maxWait = 30`,
-      `$waited = 0`,
-      `while ($waited -lt $maxWait) {`,
-      `    $proc = Get-Process -Id ${appPid} -ErrorAction SilentlyContinue`,
-      `    if (-not $proc) {`,
-      `        Log "Application fermee apres $waited secondes."`,
-      `        break`,
-      `    }`,
-      `    Start-Sleep -Milliseconds 500`,
-      `    $waited += 0.5`,
-      `}`,
-      ``,
-      `# Etape 2: Force-kill de toutes les instances restantes`,
-      `$remaining = Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue`,
-      `if ($remaining) {`,
-      `    Log "Processus DesktopServer encore actifs, force-kill..."`,
-      `    $remaining | Stop-Process -Force -ErrorAction SilentlyContinue`,
-      `    Start-Sleep -Seconds 2`,
-      `}`,
-      ``,
-      `# Etape 3: Lancement de l'installeur en mode silencieux`,
-      `Log "Lancement de l'installeur silencieux..."`,
-      `$installer = '${safeInstaller}'`,
-      `if (-not (Test-Path $installer)) {`,
-      `    Log "ERREUR: Fichier installeur introuvable: $installer"`,
-      `    exit 1`,
-      `}`,
-      ``,
-      `try {`,
-      `    $instProc = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -ErrorAction Stop`,
-      `    Log "Installeur demarre (PID: $($instProc.Id)), attente de la fin..."`,
-      `    $instProc | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue`,
-      `    Log "Installeur termine (ExitCode: $($instProc.ExitCode))"`,
-      `} catch {`,
-      `    Log "ERREUR lors de l'installation: $_"`,
-      `}`,
-      ``,
-      `Start-Sleep -Seconds 3`,
-      ``,
-      `# Etape 4: Recherche et relancement de l'application mise a jour`,
-      `Log "Recherche de l'application mise a jour..."`,
-      `$searchPaths = @(`,
-      `    (Join-Path '${localAppData}' 'Programs\\DesktopServer\\DesktopServer.exe'),`,
-      `    (Join-Path '${programFiles}' 'DesktopServer\\DesktopServer.exe'),`,
-      `    (Join-Path '${programFilesX86}' 'DesktopServer\\DesktopServer.exe')`,
-      `)`,
-      ``,
-      `$launched = $false`,
-      `foreach ($exePath in $searchPaths) {`,
-      `    Log "Verification: $exePath"`,
-      `    if (Test-Path $exePath) {`,
-      `        # Verifier qu'aucune instance n'est deja lancee par l'installeur`,
-      `        $alreadyRunning = Get-Process -Name "DesktopServer" -ErrorAction SilentlyContinue`,
-      `        if ($alreadyRunning) {`,
-      `            Log "L'application est deja lancee (probablement par l'installeur)."`,
-      `            $launched = $true`,
-      `            break`,
-      `        }`,
-      `        Log "Lancement de: $exePath"`,
-      `        Start-Process -FilePath $exePath -ErrorAction SilentlyContinue`,
-      `        $launched = $true`,
-      `        break`,
-      `    }`,
-      `}`,
-      ``,
-      `if (-not $launched) {`,
-      `    Log "AVERTISSEMENT: DesktopServer.exe non trouve dans les chemins standards."`,
-      `    Log "Chemins verifies: $($searchPaths -join ', ')"`,
-      `}`,
-      ``,
-      `# Etape 5: Nettoyage`,
-      `Start-Sleep -Seconds 2`,
-      `Log "=== Mise a jour terminee ==="`,
-      `Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue`
+    const batContent = [
+      '@echo off',
+      'setlocal enabledelayedexpansion',
+      `set "LOG=${logFilePath}"`,
+      `set "INSTALLER=${updatePath}"`,
+      `set "TARGET_EXE=${targetExe}"`,
+      `set "FALLBACK_EXE=${localAppDataExe}"`,
+      `set "APP_PID=${appPid}"`,
+      '',
+      'echo [%date% %time%] === Demarrage mise a jour DesktopServer === > "%LOG%"',
+      'echo [%date% %time%] PID cible: %APP_PID% >> "%LOG%"',
+      'echo [%date% %time%] Installeur: %INSTALLER% >> "%LOG%"',
+      '',
+      ':: 1. Attente fermeture propre de l\'application',
+      'echo [%date% %time%] Attente fermeture de l\'application... >> "%LOG%"',
+      'set /a waited=0',
+      ':wait_loop',
+      'timeout /t 1 /nobreak >nul',
+      'tasklist /fi "PID eq %APP_PID%" 2>nul | findstr /i "%APP_PID%" >nul',
+      'if errorlevel 1 goto app_closed',
+      'set /a waited+=1',
+      'if !waited! geq 25 goto force_kill',
+      'goto wait_loop',
+      '',
+      ':force_kill',
+      'echo [%date% %time%] Force-kill des processus DesktopServer... >> "%LOG%"',
+      'taskkill /F /PID %APP_PID% >nul 2>&1',
+      'taskkill /F /IM DesktopServer.exe >nul 2>&1',
+      'timeout /t 1 /nobreak >nul',
+      '',
+      ':app_closed',
+      'echo [%date% %time%] Application fermee, execution installeur silencieux... >> "%LOG%"',
+      'if not exist "%INSTALLER%" (',
+      '    echo [%date% %time%] ERREUR: Installeur introuvable: %INSTALLER% >> "%LOG%"',
+      '    exit /b 1',
+      ')',
+      '',
+      'start /wait "" "%INSTALLER%" /S',
+      'echo [%date% %time%] Installeur termine avec code: !ERRORLEVEL! >> "%LOG%"',
+      '',
+      'timeout /t 2 /nobreak >nul',
+      '',
+      ':: 2. Recherche et relance de l\'application mise a jour',
+      'echo [%date% %time%] Recherche de l\'executable mise a jour... >> "%LOG%"',
+      'set "FINAL_EXE="',
+      'if exist "%TARGET_EXE%" set "FINAL_EXE=%TARGET_EXE%"',
+      'if not defined FINAL_EXE if exist "%FALLBACK_EXE%" set "FINAL_EXE=%FALLBACK_EXE%"',
+      'if not defined FINAL_EXE (',
+      '    set "FINAL_EXE=%ProgramFiles%\\DesktopServer\\DesktopServer.exe"',
+      ')',
+      '',
+      'echo [%date% %time%] Lancement de: !FINAL_EXE! >> "%LOG%"',
+      'start "" "!FINAL_EXE!"',
+      '',
+      'echo [%date% %time%] === Mise a jour terminee avec succes === >> "%LOG%"',
+      'timeout /t 2 /nobreak >nul',
+      '(goto) 2>nul & del "%~f0"'
     ].join('\r\n');
 
     try {
-      fs.writeFileSync(psScriptPath, psContent, 'utf8');
-      child_process.spawn('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-WindowStyle', 'Hidden',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', psScriptPath
-      ], {
+      fs.writeFileSync(batScriptPath, batContent, 'utf8');
+      child_process.spawn('cmd.exe', ['/c', 'start', '""', '/min', batScriptPath], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true
       }).unref();
     } catch (e) {
-      // Fallback direct : lancer l'installeur sans script PowerShell
+      // Fallback direct : lancer l'installeur
       try {
         child_process.spawn(updatePath, ['/S'], {
           detached: true,
@@ -4452,8 +4408,8 @@ ipcMain.handle('apply-update-and-restart', async () => {
         else proc.kill('SIGTERM');
       } catch (e) {}
     }
-    // Petit délai pour laisser le temps aux serveurs de commencer leur arrêt
-    await new Promise(r => setTimeout(r, 500));
+    // Laisser un court instant pour que le batch prenne le relais
+    await new Promise(r => setTimeout(r, 400));
     app.exit(0);
     return true;
   }

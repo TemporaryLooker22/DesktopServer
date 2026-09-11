@@ -42,6 +42,10 @@ LangString CUSTOM_CHECKBOX_DESKTOP 2070 "Criar um atalho na Area de Trabalho"
 LangString CUSTOM_LABEL_STARTMENU 2070 "O aplicativo sera instalado no seu perfil de usuario e estara acessivel no menu Iniciar do Windows."
 
 Function ShowCustomOptionsPage
+  ${If} ${Silent}
+    Abort
+  ${EndIf}
+
   nsDialogs::Create 1018
   Pop $CustomOptionsDialog
   ${If} $CustomOptionsDialog == error
@@ -66,6 +70,9 @@ Function ShowCustomOptionsPage
 FunctionEnd
 
 Function LeaveCustomOptionsPage
+  ${If} ${Silent}
+    Abort
+  ${EndIf}
   ${NSD_GetState} $CheckboxDesktopShortcut $DesktopShortcutCheckboxState
 FunctionEnd
 
