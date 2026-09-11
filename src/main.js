@@ -4378,21 +4378,27 @@ ipcMain.handle('apply-update-and-restart', async () => {
       'start "" "!FINAL_EXE!"',
       '',
       'echo [%date% %time%] === Mise a jour terminee avec succes === >> "%LOG%"',
-      'timeout /t 2 /nobreak >nul',
-      '(goto) 2>nul & del "%~f0"'
+      'timeout /t 1 /nobreak >nul',
+      '(goto) 2>nul & del "%~f0" >nul 2>&1 & exit'
     ].join('\r\n');
 
     try {
       fs.writeFileSync(batScriptPath, batContent, 'utf8');
-      child_process.spawn('cmd.exe', ['/c', 'start', '""', '/min', batScriptPath], {
+      const safeBat = batScriptPath.replace(/'/g, "''");
+      child_process.spawn('powershell.exe', [
+        '-NoProfile',
+        '-WindowStyle', 'Hidden',
+        '-Command',
+        `Start-Process cmd.exe -ArgumentList '/c', '${safeBat}' -WindowStyle Hidden`
+      ], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true
       }).unref();
     } catch (e) {
-      // Fallback direct : lancer l'installeur
+      // Fallback direct
       try {
-        child_process.spawn(updatePath, ['/S'], {
+        child_process.spawn('cmd.exe', ['/c', batScriptPath], {
           detached: true,
           stdio: 'ignore',
           windowsHide: true
